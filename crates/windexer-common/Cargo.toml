@@ -1,0 +1,17 @@
+[package]
+name = "windexer-common"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Base dependencies from workspace
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+# Configuration
+config = "0.13"

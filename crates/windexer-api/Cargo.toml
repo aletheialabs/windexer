@@ -1,0 +1,24 @@
+[package]
+name = "windexer-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Internal crates
+windexer-common = { path = "../windexer-common" }
+windexer-store = { path = "../windexer-store" }
+
+# API dependencies
+tonic = "0.10"
+prost = "0.12"
+tower = "0.4"
+axum = "0.7"
+tokio-tungstenite = "0.20"
+
+# Workspace dependencies
+tokio.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+tracing.workspace = true

@@ -1,0 +1,24 @@
+[package]
+name = "windexer-network"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Internal crates
+windexer-common = { path = "../windexer-common" }
+
+# Network dependencies
+libp2p.workspace = true
+tokio.workspace = true
+futures = "0.3"
+
+# Workspace dependencies
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio-test = "0.4"
