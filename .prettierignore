@@ -1,8 +1,0 @@
-build
-coverage
-
-*.html
-
-*.rs
-
-target/
