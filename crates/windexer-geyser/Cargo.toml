@@ -1,9 +1,9 @@
 [package]
 name = "windexer-geyser"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
 # Internal crates
@@ -11,14 +11,15 @@ windexer-common = { path = "../windexer-common" }
 windexer-network = { path = "../windexer-network" }
 
 # Solana dependencies
-solana-geyser-plugin-interface.workspace = true
-solana-sdk.workspace = true
+solana-sdk = { workspace = true }
+solana-program = { workspace = true }
+solana-geyser-plugin-interface = { workspace = true }
 
 # Workspace dependencies
-tokio.workspace = true
-anyhow.workspace = true
-serde.workspace = true
-tracing.workspace = true
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -1,20 +1,20 @@
 [package]
 name = "windexer-store"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
 # Internal crates
 windexer-common = { path = "../windexer-common" }
 
 # Database dependencies
-sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres"] }
-redis = { version = "0.23", features = ["tokio-comp"] }
+sqlx = { version = "0.8.3", features = ["runtime-tokio-native-tls", "postgres"] }
+redis = { version = "0.28.2", features = ["tokio-comp"] }
 
 # Workspace dependencies
-tokio.workspace = true
-anyhow.workspace = true
-serde.workspace = true
-tracing.workspace = true
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }

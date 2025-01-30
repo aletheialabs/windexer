@@ -12,19 +12,46 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Vivek <31vivekpal@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+# Solana ecosystem - aligned versions to avoid conflicts
 solana-sdk = "2.1.11"
 solana-program = "2.1.11"
-solana-geyser-plugin-interface = "1.18.26"
+solana-geyser-plugin-interface = "1.18.0"
+solana-transaction-status = "2.1.11"
+spl-token = "7.0.0"
+spl-token-2022 = "7.0.0"
+solana-zk-token-sdk = "2.1.11"
 
-sqlx = { version = "0.8.3", default-features = false, features = ["runtime-tokio-native-tls", "postgres", "macros"] }
-
-libp2p = { version = "0.55.0", features = ["tcp", "dns", "websocket", "noise", "yamux", "gossipsub", "mdns"] }
+# Network stack
+libp2p = { version = "0.55.0", features = [
+    "tcp",
+    "dns", 
+    "websocket",
+    "noise",
+    "yamux",
+    "gossipsub",
+    "mdns",
+    "tokio"
+] }
 tokio = { version = "1.32", features = ["full"] }
+tokio-tungstenite = "0.26.1"
+tungstenite = "0.26.1"
 
+# Database functionality
+sqlx = { version = "0.8.3", default-features = false, features = [
+    "runtime-tokio-native-tls",
+    "postgres",
+    "macros"
+] }
+
+# Cryptography
+sha2 = "0.10"
+ed25519-dalek = "2.0"
+
+# Common utilities
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 anyhow = "1.0.95"
@@ -34,11 +61,9 @@ serde_json = "1.0.107"
 bytes = "1.5.0"
 futures = "0.3.28"
 async-trait = "0.1.74"
+chrono = "0.4"
 
 [patch.crates-io]
-# Explicitly pin zeroize to resolve version conflict
-zeroize = { version = "=1.8.1" }  # Use the latest version from the error list
-
-# Keep your existing git patches
 aes-gcm-siv = { git = "https://github.com/RustCrypto/AEADs", rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef" }
-curve25519-dalek = { git = "https://github.com/dalek-cryptography/curve25519-dalek.git", tag = "curve25519-4.1.1" }
+curve25519-dalek = { git = "https://github.com/dalek-cryptography/curve25519-dalek.git", rev = "c14774464c4d38de553c6ef2f48a10982c1b4801" }
+subtle = { git = "https://github.com/dalek-cryptography/subtle", tag = "2.4.0" }
