@@ -1,20 +1,20 @@
 [package]
 name = "windexer-jito-staking"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
 # Internal crates
 windexer-common = { path = "../windexer-common" }
 
 # Solana dependencies
-solana-sdk.workspace = true
-solana-program.workspace = true
+solana-sdk = { workspace = true }
+solana-program = { workspace = true }
 
 # Workspace dependencies
-tokio.workspace = true
-anyhow.workspace = true
-serde.workspace = true
-tracing.workspace = true
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }

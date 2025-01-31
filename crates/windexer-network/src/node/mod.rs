@@ -67,7 +67,7 @@ impl Node {
         )?;
 
         // Setup MDNS
-        let mdns = Mdns::new(Default::default()).await?;
+        let mdns = Mdns::new(Default::default(), peer_id).await?;
 
         // Combine behaviours
         let behaviour = WIndexerBehaviour {

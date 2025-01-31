@@ -16,16 +16,15 @@ authors = ["Vivek <31vivekpal@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# Solana ecosystem - aligned versions to avoid conflicts
-solana-sdk = "2.1.11"
-solana-program = "2.1.11"
-solana-geyser-plugin-interface = "1.18.0"
-solana-transaction-status = "2.1.11"
-spl-token = "7.0.0"
-spl-token-2022 = "7.0.0"
-solana-zk-token-sdk = "2.1.11"
+solana-sdk = "1.18.26"
+solana-program = "1.18.26" 
+solana-geyser-plugin-interface = "1.18.26"
+solana-transaction-status = "1.18.26"
+solana-zk-token-sdk = "1.18.26"
 
-# Network stack
+spl-token-2022 = "7.0.0"
+
+# Network stack (updated for compatibility)
 libp2p = { version = "0.55.0", features = [
     "tcp",
     "dns", 
@@ -36,25 +35,21 @@ libp2p = { version = "0.55.0", features = [
     "mdns",
     "tokio"
 ] }
+
+# Remaining dependencies stay the same
 tokio = { version = "1.32", features = ["full"] }
 tokio-tungstenite = "0.26.1"
 tungstenite = "0.26.1"
-
-# Database functionality
 sqlx = { version = "0.8.3", default-features = false, features = [
     "runtime-tokio-native-tls",
     "postgres",
     "macros"
 ] }
-
-# Cryptography
 sha2 = "0.10"
 ed25519-dalek = "2.0"
-
-# Common utilities
-tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
-anyhow = "1.0.95"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.17"
+anyhow = "1.0.75"
 thiserror = "2.0.11"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
@@ -64,6 +59,10 @@ async-trait = "0.1.74"
 chrono = "0.4"
 
 [patch.crates-io]
-aes-gcm-siv = { git = "https://github.com/RustCrypto/AEADs", rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef" }
-curve25519-dalek = { git = "https://github.com/dalek-cryptography/curve25519-dalek.git", rev = "c14774464c4d38de553c6ef2f48a10982c1b4801" }
-subtle = { git = "https://github.com/dalek-cryptography/subtle", tag = "2.4.0" }
+# Essential cryptographic patches
+curve25519-dalek = "4.1.2"
+subtle = { version = "=2.5.0" }
+
+# Solana program overrides
+solana-program = { git = "https://github.com/solana-labs/solana", rev = "v1.18.26" }
+solana-zk-token-sdk = { git = "https://github.com/solana-labs/solana", rev = "v1.18.26" }
