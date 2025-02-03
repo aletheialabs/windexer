@@ -1,0 +1,8 @@
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[net]
+git-fetch-with-cli = true
+
+[resolver]
+version = "2"

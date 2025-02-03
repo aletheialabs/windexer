@@ -1,4 +1,5 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use chrono::NaiveDateTime;
 
 /// Get current Unix timestamp in seconds
 pub fn current_timestamp() -> i64 {
@@ -16,7 +17,7 @@ pub fn duration_since(timestamp: i64) -> Duration {
 
 /// Convert a timestamp to human readable format
 pub fn format_timestamp(timestamp: i64) -> String {
-    let datetime = chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)
+    let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
         .unwrap_or_default();
     datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }

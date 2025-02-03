@@ -6,19 +6,29 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+# Solana dependencies
+solana-sdk = { workspace = true }
+solana-program = { workspace = true }
+
+# Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Error handling
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
+# Async utilities
 tokio = { workspace = true }
 futures = { workspace = true }
 async-trait = { workspace = true }
 
+# Logging
 tracing = { workspace = true }
 
-solana-sdk = { workspace = true }
-solana-program = { workspace = true }
+# Time handling and cryptography
+chrono = { workspace = true, features = ["serde"] }
+sha2 = { workspace = true }
 
+# Utilities
 bytes = { workspace = true }

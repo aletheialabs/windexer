@@ -10,10 +10,9 @@ license = { workspace = true }
 windexer-common = { path = "../windexer-common" }
 windexer-network = { path = "../windexer-network" }
 
-# Solana dependencies
-solana-sdk = { workspace = true }
-solana-program = { workspace = true }
-solana-geyser-plugin-interface = { workspace = true }
+# Solana dependencies - use exact versions
+solana-sdk = "=1.18.26"
+solana-program = "=1.18.26"
 
 # Workspace dependencies
 tokio = { workspace = true }

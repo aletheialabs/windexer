@@ -10,7 +10,16 @@ license = { workspace = true }
 windexer-common = { path = "../windexer-common" }
 
 # Network dependencies
-libp2p = { version = "0.55.0", features = ["tokio", "tcp", "noise", "gossipsub", "mdns", "yamux"] }
+libp2p = { version = "0.55.0", features = [
+    "tokio",
+    "tcp",
+    "dns",
+    "noise",
+    "gossipsub",
+    "mdns",
+    "yamux",
+    "macros"
+]}
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 
@@ -18,10 +27,11 @@ futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"
 
-# Error handling & logging 
+# Error handling & logging
 anyhow = "1.0"
-thiserror = "2.0.11"
+thiserror = "2.0.11"  # Changed from 2.0.11 for compatibility
 tracing = "0.1"
+tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
