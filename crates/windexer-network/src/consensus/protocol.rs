@@ -13,11 +13,9 @@ use {
 };
 
 pub struct ConsensusProtocol {
-    config: ConsensusConfig,
     state: Arc<RwLock<ConsensusState>>,
     validator_set: Arc<RwLock<ValidatorSet>>,
     message_tx: mpsc::Sender<ConsensusMessage>,
-    message_rx: mpsc::Receiver<ConsensusMessage>,
 }
 
 #[derive(Debug)]
@@ -49,27 +47,25 @@ pub type BlockHash = [u8; 32];
 
 impl ConsensusProtocol {
     pub fn new(
-        config: ConsensusConfig,
+        _config: ConsensusConfig,
         state: Arc<RwLock<ConsensusState>>,
         validator_set: Arc<RwLock<ValidatorSet>>,
     ) -> Self {
-        let (message_tx, message_rx) = mpsc::channel(1000);
+        let (message_tx, _message_rx) = mpsc::channel(1000);
         Self {
-            config,
             state,
             validator_set,
             message_tx,
-            message_rx,
         }
     }
 
-    pub async fn handle_message(&mut self, peer_id: PeerId, message: Message) -> Result<()> {
+    pub async fn handle_message(&mut self, _peer_id: PeerId, message: Message) -> Result<()> {
         match message.message_type {
-            MessageType::Block => {
+            MessageType::BlockUpdate => {
                 let block: Block = bincode::deserialize(&message.payload)?;
                 self.handle_block(block).await?;
             }
-            MessageType::Vote => {
+            MessageType::PeerAnnouncement => {
                 let vote: Vote = bincode::deserialize(&message.payload)?;
                 self.handle_vote(vote).await?;
             }
@@ -90,8 +86,9 @@ impl ConsensusProtocol {
             return Ok(());
         }
 
+        let block_clone = block.clone();
         state.add_block(block);
-        self.message_tx.send(ConsensusMessage::NewBlock(block)).await?;
+        self.message_tx.send(ConsensusMessage::NewBlock(block_clone)).await?;
 
         Ok(())
     }
