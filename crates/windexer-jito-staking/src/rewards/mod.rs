@@ -4,7 +4,6 @@ use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use anyhow::Result;
-use chrono;
 
 pub mod calculation;
 pub mod distribution;
@@ -40,5 +39,15 @@ impl RewardsManager {
         
         distributor.distribute_epoch_rewards(&rewards).await?;
         Ok(())
+    }
+
+    pub async fn distribution_interval(&self) -> Duration {
+        self.reward_distributor.read().await.distribution_interval()
+    }
+}
+
+impl Default for RewardsManager {
+    fn default() -> Self {
+        Self::new(0.1, Duration::from_secs(86400)) // Default values
     }
 }

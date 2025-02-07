@@ -11,7 +11,6 @@ pub mod types;
 mod vault;
 mod delegation;
 
-use types::*;
 use vault::VaultManager;
 use delegation::DelegationManager;
 
@@ -60,6 +59,10 @@ impl StakingManager {
             commission_bps: self.config.commission_bps,
         })
     }
+
+    pub fn config(&self) -> &StakingConfig {
+        &self.config
+    }
 }
 
 // Types and helper structs
@@ -69,6 +72,12 @@ pub struct StakingConfig {
     pub commission_bps: u16,
     pub min_delegation_period: Duration,
     pub max_operator_stake: u64,
+    pub min_operators: u32,
+    pub consensus_threshold: f64,
+    pub reward_rate: f64,
+    pub distribution_interval: Duration,
+    pub slash_threshold: f64,
+    pub min_uptime: f64,
 }
 
 #[derive(Debug)]

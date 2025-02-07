@@ -62,3 +62,9 @@ impl ConsensusManager {
         participation_rate >= self.ncn_network.consensus_threshold
     }
 }
+
+impl Default for ConsensusManager {
+    fn default() -> Self {
+        Self::new(4, 0.67) // Default values
+    }
+}

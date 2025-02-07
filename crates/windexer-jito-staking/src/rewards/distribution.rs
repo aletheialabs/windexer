@@ -3,7 +3,7 @@
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use anyhow::Result;
-use tokio::time::{Duration, Interval};
+use tokio::time::Duration;
 
 pub struct RewardDistributor {
     distribution_interval: Duration,
@@ -34,8 +34,17 @@ impl RewardDistributor {
         Ok(())
     }
 
-    async fn execute_distribution(&self, operator: &Pubkey, amount: u64) -> Result<()> {
-        // This could involve creating a transaction to transfer rewards
+    async fn execute_distribution(&self, _operator: &Pubkey, _amount: u64) -> Result<()> {
+        // Implementation pending
         Ok(())
+    }
+
+    async fn process_distribution(&self, _operator: &Pubkey, _amount: u64) -> Result<()> {
+        // Implementation pending
+        Ok(())
+    }
+
+    pub fn distribution_interval(&self) -> Duration {
+        self.distribution_interval
     }
 }

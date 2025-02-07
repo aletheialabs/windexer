@@ -1,8 +1,12 @@
-use super::{GossipConfig, GossipMessage};
-use anyhow::Result;
-use libp2p::gossipsub::TopicHash;
-use std::collections::{HashMap, HashSet};
-use tokio::sync::broadcast;
+// crates/windexer-network/src/gossip/topic_handler.rs
+
+use {
+    super::{GossipConfig, GossipMessage},
+    anyhow::Result,
+    libp2p::gossipsub::TopicHash,
+    std::collections::{HashMap, HashSet},
+    tokio::sync::broadcast,
+};
 
 pub struct TopicHandler {
     topics: HashSet<TopicHash>,
@@ -22,15 +26,13 @@ impl TopicHandler {
     pub fn subscribe(&mut self, topic: TopicHash) -> broadcast::Receiver<GossipMessage> {
         self.topics.insert(topic.clone());
         
-        let (tx, rx) = if let Some(tx) = self.subscribers.get(&topic) {
-            (tx.clone(), tx.subscribe())
+        if let Some(tx) = self.subscribers.get(&topic) {
+            tx.subscribe()
         } else {
             let (tx, rx) = broadcast::channel(1000);
-            self.subscribers.insert(topic, tx.clone());
-            (tx, rx)
-        };
-
-        rx
+            self.subscribers.insert(topic, tx);
+            rx
+        }
     }
 
     pub fn unsubscribe(&mut self, topic: &TopicHash) {
@@ -40,7 +42,7 @@ impl TopicHandler {
 
     pub async fn publish(&self, topic: &TopicHash, message: GossipMessage) -> Result<()> {
         if let Some(tx) = self.subscribers.get(topic) {
-            tx.send(message)?;
+            let _ = tx.send(message);
         }
         Ok(())
     }

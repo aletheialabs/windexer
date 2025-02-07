@@ -1,75 +1,35 @@
 // crates/windexer-network/src/consensus/state.rs
 
 use {
-    super::{protocol::{Block, BlockHash, Vote}, validator::ValidatorSet},
+    solana_sdk::vote::state::Vote,
+    windexer_common::Block,
+    super::protocol::BlockHash,
     solana_sdk::pubkey::Pubkey,
     std::collections::HashMap,
 };
 
 pub struct ConsensusState {
     pub height: u64,
-    pub last_block: Option<BlockHash>,
-    blocks: HashMap<BlockHash, Block>,
-    votes: HashMap<BlockHash, HashMap<Pubkey, Vote>>,
-    pub committed_blocks: Vec<Block>,
+    pub current_block: Option<Block>,
+    pub votes: HashMap<BlockHash, HashMap<Pubkey, Vote>>,
 }
 
 impl ConsensusState {
     pub fn new() -> Self {
         Self {
             height: 0,
-            last_block: None,
-            blocks: HashMap::new(),
+            current_block: None,
             votes: HashMap::new(),
-            committed_blocks: Vec::new(),
         }
     }
 
-    pub fn add_block(&mut self, block: Block) {
-        self.blocks.insert(block.hash, block);
+    pub fn get_votes(&self, block_hash: &BlockHash) -> Option<&HashMap<Pubkey, Vote>> {
+        self.votes.get(block_hash)
     }
 
-    pub fn add_vote(&mut self, vote: Vote) {
-        self.votes
-            .entry(vote.block)
+    pub fn add_vote(&mut self, block_hash: BlockHash, validator: Pubkey, vote: Vote) {
+        self.votes.entry(block_hash)
             .or_default()
-            .insert(vote.validator, vote);
-    }
-
-    pub fn has_vote(&self, validator: &Pubkey, block: &BlockHash) -> bool {
-        self.votes
-            .get(block)
-            .map(|votes| votes.contains_key(validator))
-            .unwrap_or(false)
-    }
-
-    pub fn get_vote_count(&self, block: &BlockHash) -> usize {
-        self.votes
-            .get(block)
-            .map(|votes| votes.len())
-            .unwrap_or(0)
-    }
-
-    pub fn get_vote_stake(&self, block: &BlockHash, validator_set: &ValidatorSet) -> u64 {
-        self.votes
-            .get(block)
-            .map(|votes| {
-                votes
-                    .keys()
-                    .map(|validator| validator_set.get_stake(validator))
-                    .sum()
-            })
-            .unwrap_or(0)
-    }
-
-    pub fn commit_block(&mut self, hash: BlockHash) {
-        if let Some(block) = self.blocks.remove(&hash) {
-            self.height = block.height;
-            self.last_block = Some(hash);
-            self.committed_blocks.push(block);
-            
-            // Clean up old votes
-            self.votes.retain(|h, _| h == &hash);
-        }
+            .insert(validator, vote);
     }
 }

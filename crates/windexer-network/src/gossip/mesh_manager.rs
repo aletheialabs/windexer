@@ -1,8 +1,12 @@
-use super::GossipConfig;
-use anyhow::Result;
-use libp2p::{PeerId, gossipsub::TopicHash};
-use std::collections::{HashMap, HashSet};
-use tracing::{debug, info};
+// crates/windexer-network/src/gossip/mesh_manager.rs
+
+use {
+    super::GossipConfig,
+    anyhow::Result,
+    libp2p::{PeerId, gossipsub::TopicHash},
+    std::collections::{HashMap, HashSet},
+    tracing::debug,
+};
 
 pub struct MeshManager {
     config: GossipConfig,

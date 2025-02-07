@@ -3,7 +3,7 @@
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use anyhow::Result;
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Debug)]
 pub struct DelegationManager {

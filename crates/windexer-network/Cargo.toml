@@ -8,6 +8,7 @@ license = { workspace = true }
 [dependencies]
 # Internal crates
 windexer-common = { path = "../windexer-common" }
+windexer-jito-staking = { path = "../windexer-jito-staking" }
 
 # Network dependencies
 libp2p = { version = "0.55.0", features = [

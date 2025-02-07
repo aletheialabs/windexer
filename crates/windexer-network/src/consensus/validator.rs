@@ -59,4 +59,8 @@ impl ValidatorSet {
             info.last_vote = Some(timestamp);
         }
     }
+
+    pub fn get_validators(&self) -> impl Iterator<Item = &Pubkey> {
+        self.validators.keys()
+    }
 }
