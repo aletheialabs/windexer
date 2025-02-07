@@ -1,68 +1,44 @@
-//! Reward distribution and calculation for staking participants
+// crates/windexer-jito-staking/src/rewards/mod.rs
 
-use crate::{Result, StakingConfig};
-use solana_program::pubkey::Pubkey;
-use std::collections::HashMap;
+use solana_sdk::pubkey::Pubkey;
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::RwLock;
+use anyhow::Result;
+use chrono;
 
-/// Manages reward distribution for staking participants
-pub struct RewardDistributor {
-    /// Reward calculation configuration
-    config: StakingConfig,
-    /// Accumulated rewards by validator
-    rewards: HashMap<Pubkey, u64>,
-    /// Last distribution timestamp
-    last_distribution: std::time::SystemTime,
+pub mod calculation;
+pub mod distribution;
+
+pub struct RewardsManager {
+    reward_calculator: Arc<RwLock<calculation::RewardCalculator>>,
+    reward_distributor: Arc<RwLock<distribution::RewardDistributor>>,
+    epoch_rewards: Arc<RwLock<HashMap<Pubkey, u64>>>,
 }
 
-impl RewardDistributor {
-    /// Creates a new reward distributor
-    pub fn new(config: StakingConfig) -> Self {
+impl RewardsManager {
+    pub fn new(reward_rate: f64, distribution_interval: Duration) -> Self {
         Self {
-            config,
-            rewards: HashMap::new(),
-            last_distribution: std::time::SystemTime::now(),
+            reward_calculator: Arc::new(RwLock::new(calculation::RewardCalculator::new(reward_rate))),
+            reward_distributor: Arc::new(RwLock::new(distribution::RewardDistributor::new(distribution_interval))),
+            epoch_rewards: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Calculates rewards for a validator based on stake and participation
-    pub async fn calculate_rewards(&self, validator: &Pubkey, stake: u64) -> Result<u64> {
-        let base_reward = (stake as f64 * self.config.reward_rate) as u64;
+    pub async fn calculate_operator_rewards(&self, operator: &Pubkey, performance_score: f64) -> Result<u64> {
+        let calculator = self.reward_calculator.read().await;
+        let mut rewards = self.epoch_rewards.write().await;
         
-        // Apply multipliers based on participation and performance
-        let participation_multiplier = self.get_participation_multiplier(validator).await?;
+        let reward_amount = calculator.calculate_reward(operator, performance_score).await?;
+        *rewards.entry(*operator).or_default() += reward_amount;
         
-        Ok((base_reward as f64 * participation_multiplier) as u64)
+        Ok(reward_amount)
     }
 
-    /// Distributes accumulated rewards to validators
-    pub async fn distribute_rewards(&mut self) -> Result<()> {
-        let now = std::time::SystemTime::now();
+    pub async fn distribute_rewards(&self) -> Result<()> {
+        let distributor = self.reward_distributor.read().await;
+        let rewards = self.epoch_rewards.read().await;
         
-        // Only distribute if reward window has elapsed
-        if now.duration_since(self.last_distribution)? < self.config.reward_window {
-            return Ok(());
-        }
-
-        for (validator, rewards) in self.rewards.iter() {
-            // Transfer rewards to validator
-            self.transfer_rewards(validator, *rewards).await?;
-        }
-
-        // Reset rewards after distribution
-        self.rewards.clear();
-        self.last_distribution = now;
-
-        Ok(())
-    }
-
-    async fn get_participation_multiplier(&self, validator: &Pubkey) -> Result<f64> {
-        // Calculate multiplier based on validator's participation
-        // This would integrate with Jito's participation tracking
-        Ok(1.0) // Default multiplier
-    }
-
-    async fn transfer_rewards(&self, validator: &Pubkey, amount: u64) -> Result<()> {
-        // Integrate with Solana program for reward transfer
+        distributor.distribute_epoch_rewards(&rewards).await?;
         Ok(())
     }
 }

@@ -1,148 +1,110 @@
-//! Manages staking vaults that hold delegated stake for the wIndexer network
+// crates/windexer-jito-staking/src/staking/vault.rs
 
-use crate::{Result, StakingError};
-use solana_program::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
+use anyhow::Result;
+use tracing::info;
+use chrono;
 
-/// Represents a staking vault that holds delegated stake
 #[derive(Debug)]
-pub struct StakingVault {
-    /// Vault's public key
-    pub address: Pubkey,
-    /// Total stake amount in the vault
-    pub total_stake: u64,
-    /// Delegators and their stake amounts
-    pub delegators: HashMap<Pubkey, u64>,
-    /// Vault configuration
-    pub config: VaultConfig,
-    /// Current vault state
-    pub state: VaultState,
+pub struct VaultManager {
+    vaults: HashMap<Pubkey, VaultState>,
+    config: VaultConfig,
 }
 
-/// Configuration parameters for a staking vault
+#[derive(Debug)]
+pub struct VaultState {
+    pub total_staked: u64,
+    pub operators: HashMap<Pubkey, OperatorState>,
+    pub last_update: i64,
+}
+
+#[derive(Debug)]
+pub struct OperatorState {
+    pub stake_amount: u64,
+    pub reward_balance: u64,
+    pub performance_score: f64,
+}
+
 #[derive(Debug, Clone)]
 pub struct VaultConfig {
-    /// Minimum stake amount accepted
-    pub min_stake: u64,
-    /// Maximum total stake allowed
-    pub max_stake: u64,
-    /// Commission rate for the vault
-    pub commission_rate: u8,
-    /// Withdrawal timelock duration
-    pub withdrawal_timelock: std::time::Duration,
-}
-
-/// Current state of a staking vault
-#[derive(Debug, Clone, PartialEq)]
-pub enum VaultState {
-    /// Vault is accepting new stakes
-    Active,
-    /// Vault is full or temporarily not accepting stakes
-    Full,
-    /// Vault is being decommissioned
-    Decommissioning,
-    /// Vault is closed to new operations
-    Closed,
-}
-
-/// Manages staking vaults in the system
-pub struct VaultManager {
-    /// Active vaults in the system
-    vaults: HashMap<Pubkey, StakingVault>,
-    /// Vault creation authority
-    authority: Pubkey,
-    /// Global vault configuration
-    global_config: VaultConfig,
+    pub max_operator_stake: u64,
+    pub min_operator_stake: u64,
+    pub performance_threshold: f64,
 }
 
 impl VaultManager {
-    /// Creates a new vault manager
-    pub fn new(authority: Pubkey, global_config: VaultConfig) -> Self {
+    pub fn new() -> Self {
         Self {
             vaults: HashMap::new(),
-            authority,
-            global_config,
+            config: VaultConfig {
+                max_operator_stake: 1_000_000_000_000,
+                min_operator_stake: 1_000_000_000,
+                performance_threshold: 0.95,
+            },
         }
     }
 
-    /// Creates a new staking vault
-    pub async fn create_vault(
-        &mut self,
-        config: VaultConfig,
-        creator: &Pubkey,
-    ) -> Result<Pubkey> {
-        // Validate vault creation
-        if !self.can_create_vault(creator) {
-            return Err(StakingError::Other(anyhow::anyhow!(
-                "Unauthorized vault creation"
-            )));
+    pub async fn increase_stake(&mut self, operator: Pubkey, amount: u64) -> Result<()> {
+        let max_stake = self.config.max_operator_stake;
+        let operator_state = self.get_or_create_operator_state(&operator)?;
+        
+        if operator_state.stake_amount + amount > max_stake {
+            return Err(anyhow::anyhow!("Exceeds maximum operator stake"));
         }
 
-        // Generate vault address
-        let vault_address = Pubkey::new_unique();
-
-        // Create new vault
-        let vault = StakingVault {
-            address: vault_address,
-            total_stake: 0,
-            delegators: HashMap::new(),
-            config,
-            state: VaultState::Active,
-        };
-
-        // Add to active vaults
-        self.vaults.insert(vault_address, vault);
-
-        Ok(vault_address)
-    }
-
-    /// Processes a stake deposit into a vault
-    pub async fn deposit_stake(
-        &mut self,
-        vault: &Pubkey,
-        delegator: &Pubkey,
-        amount: u64,
-    ) -> Result<()> {
-        let vault = self.vaults.get_mut(vault)
-            .ok_or_else(|| StakingError::Other(anyhow::anyhow!("Vault not found")))?;
-
-        // Validate deposit
-        if !self.validate_deposit(vault, amount)? {
-            return Err(StakingError::InvalidStakeAmount(
-                "Invalid deposit amount".into(),
-            ));
-        }
-
-        // Update vault state
-        vault.total_stake += amount;
-        *vault.delegators.entry(*delegator).or_default() += amount;
-
+        operator_state.stake_amount += amount;
+        info!("Increased stake for operator {} by {} lamports", operator, amount);
         Ok(())
     }
 
-    /// Initiates a stake withdrawal from a vault
-    pub async fn initiate_withdrawal(
-        &mut self,
-        vault: &Pubkey,
-        delegator: &Pubkey,
-        amount: u64,
-    ) -> Result<()> {
-        let vault = self.vaults.get_mut(vault)
-            .ok_or_else(|| StakingError::Other(anyhow::anyhow!("Vault not found")))?;
-
-        // Validate withdrawal
-        if !self.validate_withdrawal(vault, delegator, amount)? {
-            return Err(StakingError::InsufficientStake(
-                "Insufficient stake for withdrawal".into(),
-            ));
+    pub async fn decrease_stake(&mut self, operator: Pubkey, amount: u64) -> Result<()> {
+        let min_stake = self.config.min_operator_stake;
+        let operator_state = self.get_operator_state_mut(&operator)?;
+        
+        if operator_state.stake_amount < amount {
+            return Err(anyhow::anyhow!("Insufficient stake balance"));
         }
 
-        // Create withdrawal request
-        // This would typically involve creating an on-chain transaction
-        // and handling the timelock period
+        if operator_state.stake_amount - amount < min_stake {
+            return Err(anyhow::anyhow!("Would fall below minimum stake threshold"));
+        }
 
+        operator_state.stake_amount -= amount;
+        info!("Decreased stake for operator {} by {} lamports", operator, amount);
         Ok(())
     }
 
-    // Helper methods would go here...
+    pub async fn get_total_stake(&self, operator: &Pubkey) -> Result<u64> {
+        let operator_state = self.get_operator_state(operator)?;
+        Ok(operator_state.stake_amount)
+    }
+
+    fn get_operator_state(&self, operator: &Pubkey) -> Result<&OperatorState> {
+        self.vaults
+            .values()
+            .find_map(|v| v.operators.get(operator))
+            .ok_or_else(|| anyhow::anyhow!("Operator not found"))
+    }
+
+    fn get_operator_state_mut(&mut self, operator: &Pubkey) -> Result<&mut OperatorState> {
+        self.vaults
+            .values_mut()
+            .find_map(|v| v.operators.get_mut(operator))
+            .ok_or_else(|| anyhow::anyhow!("Operator not found"))
+    }
+
+    fn get_or_create_operator_state(&mut self, operator: &Pubkey) -> Result<&mut OperatorState> {
+        let vault = self.vaults.entry(Pubkey::new_unique()).or_insert(VaultState {
+            total_staked: 0,
+            operators: HashMap::new(),
+            last_update: chrono::Utc::now().timestamp(),
+        });
+
+        Ok(vault.operators.entry(*operator).or_insert(OperatorState {
+            stake_amount: 0,
+            reward_balance: 0,
+            performance_score: 1.0,
+        }))
+    }
 }

@@ -1,145 +1,64 @@
-//! Monitors validator behavior for slashing conditions
+// crates/windexer-jito-staking/src/slashing/monitor.rs
 
-use crate::{Result, StakingError};
-use solana_program::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use anyhow::Result;
+use crate::slashing::ViolationType;
 
-/// Types of slashable offenses
-#[derive(Debug, Clone, PartialEq)]
-pub enum SlashingOffense {
-    /// Validator was offline during required period
-    Downtime { duration: Duration },
-    /// Validator double signed a message
-    DoubleSigning { evidence: Vec<u8> },
-    /// Validator violated consensus rules
-    ConsensusViolation { description: String },
-    /// Validator failed to participate in required operations
-    MissedParticipation { missed_count: u64 },
-}
-
-/// Monitors validator behavior for slashing conditions
 pub struct SlashingMonitor {
-    /// Recorded offenses by validator
-    offenses: HashMap<Pubkey, Vec<SlashingOffense>>,
-    /// Validator uptime tracking
-    uptime: HashMap<Pubkey, Vec<UptimeRecord>>,
-    /// Monitoring configuration
-    config: MonitorConfig,
+    slash_threshold: f64,
+    min_uptime: f64,
+    violation_history: HashMap<Pubkey, Vec<ViolationRecord>>,
 }
 
-/// Records of validator uptime
 #[derive(Debug, Clone)]
-struct UptimeRecord {
-    /// Start of the monitoring period
-    start: Instant,
-    /// End of the monitoring period
-    end: Instant,
-    /// Whether the validator was responsive
-    responsive: bool,
-}
-
-/// Configuration for slashing monitor
-#[derive(Debug, Clone)]
-struct MonitorConfig {
-    /// Maximum allowed downtime before slashing
-    max_downtime: Duration,
-    /// Minimum required participation rate
-    min_participation_rate: f64,
-    /// How often to check for violations
-    check_interval: Duration,
+pub struct ViolationRecord {
+    pub timestamp: i64,
+    pub violation_type: ViolationType,
+    pub severity: f64,
 }
 
 impl SlashingMonitor {
-    /// Creates a new slashing monitor
-    pub fn new(config: MonitorConfig) -> Self {
+    pub fn new(slash_threshold: f64, min_uptime: f64) -> Self {
         Self {
-            offenses: HashMap::new(),
-            uptime: HashMap::new(),
-            config,
+            slash_threshold,
+            min_uptime,
+            violation_history: HashMap::new(),
         }
     }
 
-    /// Records a new offense for a validator
-    pub async fn record_offense(
-        &mut self,
-        validator: &Pubkey,
-        offense: SlashingOffense,
-    ) -> Result<()> {
-        // Record the offense
-        self.offenses
-            .entry(*validator)
-            .or_default()
-            .push(offense.clone());
-
-        // Check if slashing threshold is reached
-        if self.should_slash(validator).await? {
-            self.initiate_slashing(validator).await?;
-        }
-
-        Ok(())
-    }
-
-    /// Updates validator uptime records
-    pub async fn update_uptime(
-        &mut self,
-        validator: &Pubkey,
-        responsive: bool,
-    ) -> Result<()> {
-        let now = Instant::now();
-        
-        let record = UptimeRecord {
-            start: now - self.config.check_interval,
-            end: now,
-            responsive,
+    pub async fn should_slash(&mut self, operator: &Pubkey, violation: &ViolationType) -> Result<bool> {
+        let severity = self.calculate_violation_severity(violation);
+        let records = self.violation_history
+            .entry(*operator)
+            .or_default();
+            
+        let violation_record = ViolationRecord {
+            timestamp: chrono::Utc::now().timestamp(),
+            violation_type: violation.clone(),
+            severity,
         };
-
-        self.uptime.entry(*validator).or_default().push(record);
-
-        // Check for downtime violation
-        if self.check_downtime_violation(validator).await? {
-            self.record_offense(
-                validator,
-                SlashingOffense::Downtime {
-                    duration: self.calculate_downtime(validator),
-                },
-            ).await?;
-        }
-
-        Ok(())
+        
+        records.push(violation_record);
+        self.check_slash_threshold(operator)
     }
 
-    /// Checks if a validator should be slashed
-    async fn should_slash(&self, validator: &Pubkey) -> Result<bool> {
-        let offenses = self.offenses.get(validator)
-            .ok_or_else(|| StakingError::Other(anyhow::anyhow!("Validator not found")))?;
-
-        // Implement slashing conditions based on offense type and count
-        match offenses.last() {
-            Some(SlashingOffense::DoubleSigning { .. }) => {
-                // Double signing is an immediate slashing condition
-                Ok(true)
-            }
-            Some(SlashingOffense::Downtime { duration }) => {
-                // Slash if downtime exceeds maximum allowed
-                Ok(*duration >= self.config.max_downtime)
-            }
-            _ => {
-                // Check other conditions...
-                Ok(false)
-            }
+    fn calculate_violation_severity(&self, violation: &ViolationType) -> f64 {
+        match violation {
+            ViolationType::Downtime => 0.5,
+            ViolationType::InvalidConsensus => 0.8,
+            ViolationType::MaliciousBehavior => 1.0,
         }
     }
 
-    /// Initiates the slashing process for a validator
-    async fn initiate_slashing(&self, validator: &Pubkey) -> Result<()> {
-        // This would typically involve:
-        // 1. Creating an on-chain slashing transaction
-        // 2. Notifying the network
-        // 3. Updating stake amounts
-        // 4. Recording the slashing event
-        Ok(())
+    fn check_slash_threshold(&self, operator: &Pubkey) -> Result<bool> {
+        let records = self.violation_history.get(operator)
+            .ok_or_else(|| anyhow::anyhow!("No violation history found"))?;
+            
+        let total_severity: f64 = records.iter()
+            .map(|r| r.severity)
+            .sum();
+            
+        Ok(total_severity >= self.slash_threshold)
     }
-
-    // Helper methods would go here...
 }

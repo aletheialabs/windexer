@@ -8,6 +8,7 @@ license = { workspace = true }
 [dependencies]
 # Internal crates
 windexer-common = { path = "../windexer-common" }
+chrono = "0.4"
 
 # Solana dependencies
 solana-sdk = { workspace = true }
