@@ -6,8 +6,8 @@ pub mod rewards;
 pub mod slashing;
 pub mod staking;
 
-use solana_program::pubkey::Pubkey;
 use thiserror::Error;
+use std::time::SystemTimeError;
 
 /// Errors that can occur in staking operations
 #[derive(Error, Debug)]
@@ -26,6 +26,9 @@ pub enum StakingError {
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+
+    #[error("System time error: {0}")]
+    SystemTimeError(String),
 }
 
 pub type Result<T> = std::result::Result<T, StakingError>;
@@ -41,4 +44,10 @@ pub struct StakingConfig {
     pub slash_percentage: f64,
     /// Time window for calculating rewards
     pub reward_window: std::time::Duration,
+}
+
+impl From<SystemTimeError> for StakingError {
+    fn from(err: SystemTimeError) -> Self {
+        StakingError::SystemTimeError(err.to_string())
+    }
 }

@@ -158,6 +158,7 @@ impl Node {
         Ok(())
     }
 
+    #[allow(dead_code)]
     async fn broadcast_message(&mut self, topic: IdentTopic, data: Vec<u8>) -> Result<()> {
         self.swarm.behaviour_mut().gossipsub.publish(topic, data)?;
         self.metrics.record_message_sent();
