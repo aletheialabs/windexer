@@ -10,7 +10,6 @@ pub mod gossip;
 pub mod consensus;
 pub mod metrics;
 
-/// Represents errors that can occur in the networking layer
 #[derive(Debug, Error)]
 pub enum NetworkError {
     #[error("Failed to initialize network: {0}")]
@@ -32,25 +31,20 @@ pub enum NetworkError {
     SerializationError(#[from] bincode::Error),
 
     #[error("Libp2p error: {0}")]
-    Libp2pError(#[from] libp2p::core::transport::Error),
+    Libp2pError(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
-/// Custom Result type for network operations
 pub type Result<T> = std::result::Result<T, NetworkError>;
 
-// Re-export key types and configs for easier access
 pub use node::Node;
 pub use node::NodeConfig;
 pub use gossip::{GossipConfig, GossipMessage, MessageType};
 pub use consensus::ConsensusConfig;
 
-/// Initialize logging for the network module
 pub fn init_logging() {
     tracing_subscriber::fmt::init();
 }
 
-/// Version of the network protocol
 pub const PROTOCOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Minimum supported protocol version
 pub const MINIMUM_PROTOCOL_VERSION: &str = "0.1.0";

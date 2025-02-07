@@ -5,11 +5,13 @@ use {
     std::collections::HashMap,
 };
 
+#[derive(Debug)]
 pub struct ValidatorSet {
     validators: HashMap<Pubkey, ValidatorInfo>,
     total_stake: u64,
 }
 
+#[derive(Debug)]
 pub struct ValidatorInfo {
     pub stake: u64,
     pub last_vote: Option<i64>,

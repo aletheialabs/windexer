@@ -3,7 +3,7 @@
 use {
     super::{protocol::{Block, BlockHash, Vote}, validator::ValidatorSet},
     solana_sdk::pubkey::Pubkey,
-    std::collections::{HashMap, HashSet},
+    std::collections::HashMap,
 };
 
 pub struct ConsensusState {

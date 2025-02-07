@@ -2,12 +2,14 @@
 
 use {
     super::{ConsensusConfig, state::ConsensusState, validator::ValidatorSet},
-    crate::gossip::Message,
+    windexer_common::Message,
+    windexer_common::MessageType,
     anyhow::Result,
     libp2p::PeerId,
     solana_sdk::pubkey::Pubkey,
-    std::{collections::HashMap, sync::Arc},
+    std::sync::Arc,
     tokio::sync::{mpsc, RwLock},
+    serde::{Serialize, Deserialize},
 };
 
 pub struct ConsensusProtocol {
@@ -26,7 +28,7 @@ pub enum ConsensusMessage {
     ValidatorUpdate(ValidatorSet),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Block {
     pub hash: BlockHash,
     pub parent: BlockHash,
@@ -36,7 +38,7 @@ pub struct Block {
     pub transactions: Vec<Vec<u8>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Vote {
     pub block: BlockHash,
     pub validator: Pubkey,
@@ -62,12 +64,12 @@ impl ConsensusProtocol {
     }
 
     pub async fn handle_message(&mut self, peer_id: PeerId, message: Message) -> Result<()> {
-        match message.typ {
-            crate::gossip::MessageType::BlockData => {
+        match message.message_type {
+            MessageType::Block => {
                 let block: Block = bincode::deserialize(&message.payload)?;
                 self.handle_block(block).await?;
             }
-            crate::gossip::MessageType::ConsensusVote => {
+            MessageType::Vote => {
                 let vote: Vote = bincode::deserialize(&message.payload)?;
                 self.handle_vote(vote).await?;
             }
@@ -95,20 +97,22 @@ impl ConsensusProtocol {
     }
 
     async fn handle_vote(&mut self, vote: Vote) -> Result<()> {
-        let mut state = self.state.write().await;
-        let validator_set = self.validator_set.read().await;
+        let block_hash = vote.block;
+        {
+            let mut state = self.state.write().await;
+            let validator_set = self.validator_set.read().await;
 
-        if !validator_set.is_validator(&vote.validator) {
-            return Ok(());
+            if !validator_set.is_validator(&vote.validator) {
+                return Ok(());
+            }
+
+            if state.has_vote(&vote.validator, &vote.block) {
+                return Ok(());
+            }
+
+            state.add_vote(vote);
         }
-
-        if state.has_vote(&vote.validator, &vote.block) {
-            return Ok(());
-        }
-
-        state.add_vote(vote);
-        self.check_consensus(&vote.block).await?;
-
+        self.check_consensus(&block_hash).await?;
         Ok(())
     }
 
@@ -116,7 +120,6 @@ impl ConsensusProtocol {
         let state = self.state.read().await;
         let validator_set = self.validator_set.read().await;
 
-        let vote_count = state.get_vote_count(block_hash);
         let total_stake = validator_set.total_stake();
         let vote_stake = state.get_vote_stake(block_hash, &validator_set);
 

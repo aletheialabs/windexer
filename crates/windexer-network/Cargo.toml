@@ -33,5 +33,8 @@ thiserror = "2.0.11"  # Changed from 2.0.11 for compatibility
 tracing = "0.1"
 tracing-subscriber = { workspace = true }
 
+# Solana SDK
+solana-sdk = { workspace = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
