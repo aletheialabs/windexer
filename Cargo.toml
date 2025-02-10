@@ -22,6 +22,9 @@ solana-program = "=1.18.26"
 solana-geyser-plugin-interface = "=1.18.26"
 solana-transaction-status = "=1.18.26"
 solana-zk-token-sdk = "=1.18.26"
+jito-restaking-sdk = "0.0.1"
+jito-restaking-core = "0.0.1" 
+jito-vault-sdk = "0.0.1"
 
 # Use spl-token-2022 version compatible with Solana 1.18.26
 spl-token-2022 = "=1.18.26"

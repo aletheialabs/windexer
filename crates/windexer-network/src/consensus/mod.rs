@@ -8,5 +8,3 @@ pub mod state;
 pub mod validator;
 
 pub use protocol::{ConsensusProtocol, ConsensusMessage, BlockHash};
-
-// Remove duplicate ConsensusConfig definition since we're using the one from config.rs

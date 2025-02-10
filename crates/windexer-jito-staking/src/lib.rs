@@ -15,8 +15,9 @@ pub mod rewards;
 pub mod slashing;
 pub mod consensus;
 
-pub use staking::{StakingManager, StakingConfig};
-pub use consensus::{ConsensusManager, NCNNetwork};
+pub use staking::types::{StakingConfig, OperatorStats};
+pub use staking::StakingManager;
+pub use consensus::ConsensusManager;
 pub use rewards::RewardsManager;
 pub use slashing::{SlashingManager, ViolationType};
 
@@ -124,7 +125,7 @@ impl JitoStakingService {
 
 #[derive(Debug)]
 pub struct OperatorInfo {
-    pub stats: staking::OperatorStats,
+    pub stats: OperatorStats,
     pub performance: f64,
     pub rewards: u64,
 }

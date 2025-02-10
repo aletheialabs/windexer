@@ -21,7 +21,6 @@ pub struct ConsensusProtocol {
     state: Arc<RwLock<ConsensusState>>,
     validator_set: Arc<RwLock<ValidatorSet>>,
     message_tx: mpsc::Sender<ConsensusMessage>,
-    // Add staking integration
     staking_manager: Arc<StakingManager>,
 }
 
