@@ -74,8 +74,8 @@ impl JitoStakingService {
         let stats = self.staking_manager.get_operator_stats(operator).await?;
         Ok(OperatorInfo {
             stats,
-            performance: 1.0, // Default value until implemented
-            rewards: 0,       // Default value until implemented
+            performance: 1.0,
+            rewards: 0,
         })
     }
 

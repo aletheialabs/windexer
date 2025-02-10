@@ -1,0 +1,90 @@
+# Project Overview
+This is a decentralized Solana indexer application built in Rust using libp2p for p2p networking and Jito restaking for validator security. The indexer leverages Solana's Geyser plugin interface to process blockchain data in real-time through a distributed network of nodes.
+
+# Coding Standards
+- Write idiomatic Rust code following the official Rust style guide
+- Use async/await for asynchronous operations
+- Implement proper error handling with custom error types
+- Follow standard Rust naming conventions (snake_case for functions/variables, PascalCase for types)
+- Document all public interfaces with rustdoc comments
+- Keep functions focused and modular with clear single responsibilities
+
+# Project Structure
+- crates/windexer-api: Public API interfaces and types
+- crates/windexer-common: Shared utilities and common types
+- crates/windexer-geyser: Solana Geyser plugin implementation
+- crates/windexer-jito-staking: Jito restaking and NCN integration
+- crates/windexer-network: libp2p networking and consensus
+- crates/windexer-store: Data persistence and caching layer
+
+# Libraries and Dependencies
+Key dependencies:
+- libp2p for peer-to-peer networking and gossipsub
+- solana-geyser-plugin-interface for blockchain data ingestion
+- jito-restaking-sdk for validator staking and NCNs
+- tokio for async runtime
+- sqlx for database operations
+- tracing for logging
+- anyhow and thiserror for error handling
+
+# Testing Requirements
+- Write unit tests for all core functionality
+- Include integration tests for key subsystems
+- Test p2p networking with local test networks
+- Test Geyser plugin with local validator
+- Aim for >80% test coverage
+- Use tokio-test for async testing
+- Implement proper mocking for external dependencies
+
+# Documentation Guidelines
+- Document all public APIs with rustdoc comments
+- Include usage examples in documentation
+- Maintain detailed READMEs in each crate
+- Document architecture decisions and trade-offs
+- Keep diagrams updated for system architecture
+- Document configuration options and deployment steps
+
+# Error Handling
+- Define custom error types for each crate
+- Use anyhow for application errors
+- Use thiserror for library errors
+- Implement proper error context
+- Log errors with appropriate levels
+- Ensure errors are propagated correctly
+- Handle network failures gracefully
+- Implement retry logic where appropriate
+
+# Performance Requirements 
+- Support high throughput transaction processing
+- Minimize latency in p2p message propagation
+- Implement efficient caching strategies
+- Optimize database queries and indexing
+- Support horizontal scaling
+- Monitor and optimize resource usage
+
+# Security Guidelines
+- Validate all network messages
+- Implement proper access controls
+- Follow secure coding practices
+- Handle sensitive data appropriately
+- Implement rate limiting
+- Monitor for malicious behavior
+- Keep dependencies updated
+
+# Deployment
+- Support containerized deployment
+- Provide Docker configurations
+- Document scaling strategies
+- Monitor system health
+- Implement graceful shutdown
+- Support configuration via environment
+- Enable metrics collection
+
+# Contributing Guidelines
+- Follow semantic versioning
+- Use feature branches
+- Write descriptive commit messages
+- Update documentation
+- Add tests for new features
+- Run full test suite before merging
+- Keep dependencies up to date

@@ -21,10 +21,16 @@ impl DelegationManager {
         staker: Pubkey,
         amount: u64
     ) -> Result<()> {
-        self.delegations
+        let operator_delegations = self.delegations
             .entry(operator)
-            .or_insert_with(Vec::new)
-            .push((staker, amount));
+            .or_insert_with(Vec::new);
+            
+        // Check for existing delegation from this staker
+        if let Some(pos) = operator_delegations.iter().position(|(s, _)| s == &staker) {
+            operator_delegations[pos].1 += amount;
+        } else {
+            operator_delegations.push((staker, amount));
+        }
             
         Ok(())
     }
@@ -34,5 +40,19 @@ impl DelegationManager {
             .get(operator)
             .cloned()
             .unwrap_or_default()
+    }
+
+    pub fn remove_delegation(
+        &mut self,
+        operator: &Pubkey,
+        staker: &Pubkey
+    ) -> Result<u64> {
+        if let Some(delegations) = self.delegations.get_mut(operator) {
+            if let Some(pos) = delegations.iter().position(|(s, _)| s == staker) {
+                let (_, amount) = delegations.remove(pos);
+                return Ok(amount);
+            }
+        }
+        Err(anyhow::anyhow!("Delegation not found"))
     }
 }

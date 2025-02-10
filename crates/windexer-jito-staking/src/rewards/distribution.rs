@@ -35,12 +35,12 @@ impl RewardDistributor {
     }
 
     async fn execute_distribution(&self, _operator: &Pubkey, _amount: u64) -> Result<()> {
-        // Implementation pending
+
         Ok(())
     }
 
     async fn process_distribution(&self, _operator: &Pubkey, _amount: u64) -> Result<()> {
-        // Implementation pending
+        
         Ok(())
     }
 

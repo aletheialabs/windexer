@@ -20,16 +20,20 @@ impl VaultManager {
         _mint: Pubkey,
         _ncn: Pubkey
     ) -> Result<Pubkey> {
-        // Implementation pending
-        Ok(Pubkey::default())
+        let vault = Pubkey::new_unique();
+        self.vaults.push(vault);
+        Ok(vault)
     }
 
     pub async fn add_delegation(
         &self,
-        _vault: Pubkey,
+        vault: Pubkey,
         _operator: Pubkey,
         _amount: u64
     ) -> Result<()> {
+        if !self.vaults.contains(&vault) {
+            return Err(anyhow::anyhow!("Invalid vault"));
+        }
         Ok(())
     }
 }
