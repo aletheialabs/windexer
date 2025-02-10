@@ -11,7 +11,6 @@ pub fn hash_message(message: &[u8]) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-/// Sign a message using a keypair
 pub fn sign_message(keypair: &Keypair, message: &[u8]) -> Signature {
     keypair.sign_message(message)
 }
@@ -28,7 +27,6 @@ pub fn verify_signature(pubkey: &[u8], message: &[u8], signature: &[u8]) -> bool
     }
 }
 
-/// Generate a new random keypair
 pub fn generate_keypair() -> Keypair {
     Keypair::new()
 }
