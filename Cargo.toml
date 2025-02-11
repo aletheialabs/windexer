@@ -6,7 +6,8 @@ members = [
     "crates/windexer-geyser", 
     "crates/windexer-jito-staking",
     "crates/windexer-network",
-    "crates/windexer-store"
+    "crates/windexer-store",
+    "crates/windexer-examples"
 ]
 
 [workspace.package]
@@ -38,7 +39,9 @@ libp2p = { version = "0.51", features = [
     "gossipsub",
     "mdns",
     "yamux",
-    "macros"
+    "macros",
+    "async-std",
+    "identify"
 ]}
 
 # Other dependencies remain unchanged

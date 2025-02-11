@@ -1,16 +1,10 @@
-.PHONY: build run test lint clean
+.PHONY: run-local clean
 
-build:
-	cargo build --release
+data:
+	mkdir -p data
 
-run:
-	cargo run
-
-test:
-	cargo test
-
-lint:
-	cargo clippy -- -D warnings
+run-local: data
+	cargo run --bin local-network
 
 clean:
-	cargo clean
+	rm -rf ./data/node_*

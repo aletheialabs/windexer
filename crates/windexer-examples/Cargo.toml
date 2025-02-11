@@ -1,0 +1,21 @@
+[package]
+name = "windexer-examples"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+
+[[bin]]
+name = "local-network"
+path = "src/local_network.rs"
+
+[dependencies]
+windexer-common = { path = "../windexer-common" }
+windexer-network = { path = "../windexer-network" }
+windexer-jito-staking = { path = "../windexer-jito-staking" }
+
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+solana-sdk = { workspace = true }

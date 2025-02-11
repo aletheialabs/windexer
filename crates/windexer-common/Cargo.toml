@@ -32,3 +32,4 @@ sha2 = { workspace = true }
 
 # Utilities
 bytes = { workspace = true }
+bs58 = "0.5"

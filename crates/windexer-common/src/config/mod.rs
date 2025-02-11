@@ -2,9 +2,11 @@
 
 mod network;
 mod store;
+pub mod node;
 
 pub use network::NetworkConfig;
 pub use store::StoreConfig;
+pub use node::NodeConfig;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

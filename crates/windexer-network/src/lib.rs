@@ -41,7 +41,7 @@ pub enum NetworkError {
 pub type Result<T> = std::result::Result<T, NetworkError>;
 
 pub use node::Node;
-pub use node::NodeConfig;
+pub use windexer_common::config::NodeConfig;
 pub use gossip::{GossipConfig, GossipMessage, MessageType};
 pub use consensus::config::ConsensusConfig;
 
