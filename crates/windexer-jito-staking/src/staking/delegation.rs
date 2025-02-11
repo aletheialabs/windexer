@@ -25,7 +25,6 @@ impl DelegationManager {
             .entry(operator)
             .or_insert_with(Vec::new);
             
-        // Check for existing delegation from this staker
         if let Some(pos) = operator_delegations.iter().position(|(s, _)| s == &staker) {
             operator_delegations[pos].1 += amount;
         } else {
