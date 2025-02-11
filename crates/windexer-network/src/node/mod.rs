@@ -23,6 +23,7 @@ use {
         Multiaddr,
         PeerId,
         Transport,
+        identity,
     },
     solana_sdk::{
         pubkey::Pubkey,
@@ -42,10 +43,15 @@ use {
     windexer_jito_staking::{JitoStakingService, StakingConfig},
 };
 
-// Convert Solana keypair to libp2p keypair for network identity
-pub fn convert_keypair(solana_keypair: &SolanaKeypair) -> libp2p::identity::Keypair {
-    let secret = solana_keypair.to_bytes();
-    libp2p::identity::Keypair::ed25519_from_bytes(secret).expect("Valid keypair conversion")
+use std::convert::TryInto;
+
+pub fn convert_keypair(solana_keypair: &SolanaKeypair) -> identity::Keypair {
+    let full_bytes = solana_keypair.to_bytes();
+    let seed: [u8; 32] = full_bytes[..32]
+        .try_into()
+        .expect("Slice should have a length of 32 bytes");
+    identity::Keypair::ed25519_from_bytes(seed)
+        .expect("Valid keypair conversion")
 }
 
 // Combined network behavior using both gossipsub and mDNS
