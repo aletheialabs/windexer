@@ -6,16 +6,21 @@ authors = { workspace = true }
 license = { workspace = true }
 
 [[bin]]
-name = "local-network"
-path = "src/local_network.rs"
+name = "node"
+path = "src/node.rs"
 
 [dependencies]
 windexer-common = { path = "../windexer-common" }
 windexer-network = { path = "../windexer-network" }
 windexer-jito-staking = { path = "../windexer-jito-staking" }
 
+clap = { version = "4.0", features = ["derive"] }
+axum = "0.8.1"
+serde = { version = "1.0", features = ["derive"] }
+
 tokio = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 anyhow = { workspace = true }
 solana-sdk = { workspace = true }
+ctrlc = "3.4"
