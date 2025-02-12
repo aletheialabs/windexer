@@ -14,14 +14,14 @@ build:
 	@$(CARGO) build --workspace
 
 run-node-%: build
-	@$(CARGO) run --example local_network -- \
+	@$(CARGO) run --bin node -- \
 		--index $* \
 		--base-port $(BASE_PORT) \
 		--enable-tip-route
 
 run-local-network: build
 	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
-		$(CARGO) run --example local_network -- \
+		$(CARGO) run --bin node -- \
 			--index $$i \
 			--base-port $(BASE_PORT) \
 			--enable-tip-route & \
