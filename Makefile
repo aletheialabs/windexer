@@ -6,22 +6,22 @@ BASE_PORT := 9000
 RPC_PORT_OFFSET := 1000
 DATA_DIR := ./data
 
-.PHONY: all build run-local-network run-node clean demo
+.PHONY: all build run-node clean demo
 
 all: build
 
 build:
 	@$(CARGO) build --workspace
 
-run-node-%:
-	@$(CARGO) run --example node -- \
+run-node-%: build
+	@$(CARGO) run --example local_network -- \
 		--index $* \
 		--base-port $(BASE_PORT) \
 		--enable-tip-route
 
 run-local-network: build
 	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
-		$(CARGO) run --example node -- \
+		$(CARGO) run --example local_network -- \
 			--index $$i \
 			--base-port $(BASE_PORT) \
 			--enable-tip-route & \
