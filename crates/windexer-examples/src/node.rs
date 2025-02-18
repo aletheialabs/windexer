@@ -12,8 +12,9 @@ use {
     tracing::{info, warn},
     tracing_subscriber::EnvFilter,
     windexer_common::{
-        config::NodeConfig,
+        config::{NodeType, PublisherNodeConfig, RelayerNodeConfig, NodeConfig},
         crypto::SerializableKeypair,
+
     },
     windexer_jito_staking::StakingConfig,
     windexer_network::Node,
@@ -27,6 +28,10 @@ use {
     long_about = "Runs a wIndexer node that connects to the Jito network for block data and tip routing"
 )]
 struct Args {
+    /// Node type (publisher, relayer)
+    #[clap(long, Option("publisher", "relayer"))]
+    node_type: String,
+
     /// Node index (0, 1, 2)
     #[clap(short, long)]
     index: u16,
@@ -78,16 +83,32 @@ async fn main() -> Result<()> {
     info!("   RPC: {}", rpc_port);
     info!("   Metrics: {}", metrics_port);
 
-    let config = NodeConfig {
-        node_id: format!("node_{}", args.index),
-        listen_addr: format!("127.0.0.1:{}", port).parse()?,
-        rpc_addr: format!("127.0.0.1:{}", rpc_port).parse()?,
-        bootstrap_peers: args.bootstrap_peers,
-        data_dir: format!("./data/node_{}", args.index),
-        solana_rpc_url: args.solana_rpc,
-        keypair: SerializableKeypair::new(&Keypair::new()),
-        geyser_plugin_config: None,
-        metrics_addr: Some(format!("127.0.0.1:{}", metrics_port).parse()?),
+    let config: Box<dyn NodeConfig> = match args.node_type.to_lowercase().as_str() {
+        "publisher" => Box::new(PublisherNodeConfig {
+            node_id: format!("publisher_{}", args.index),
+            node_type: NodeType::PUBLISHER,
+            listen_addr: format!("127.0.0.1:{}", port).parse()?,
+            rpc_addr: format!("127.0.0.1:{}", rpc_port).parse()?,
+            bootstrap_peers: args.bootstrap_peers,
+            data_dir: format!("./data/node_{}", args.index),
+            solana_rpc_url: args.solana_rpc,
+            keypair: SerializableKeypair::new(&Keypair::new()),
+            geyser_plugin_config: None,
+            metrics_addr: Some(format!("127.0.0.1:{}", metrics_port).parse()?),
+        }),
+        "relayer" => Box::new(RelayerNodeConfig {
+            node_id: format!("relayer_{}", args.index),
+            node_type: NodeType::RELAYER,
+            listen_addr: format!("127.0.0.1:{}", port).parse()?,
+            rpc_addr: format!("127.0.0.1:{}", rpc_port).parse()?,
+            bootstrap_peers: args.bootstrap_peers,
+            data_dir: format!("./data/node_{}", args.index),
+            solana_rpc_url: args.solana_rpc,
+            keypair: SerializableKeypair::new(&Keypair::new()),
+            geyser_plugin_config: None,
+            metrics_addr: Some(format!("127.0.0.1:{}", metrics_port).parse()?),
+        }),
+        _ => return Err(anyhow!("Invalid node type. Must be 'publisher' or 'relayer'")),
     };
 
     let staking_config = StakingConfig {
