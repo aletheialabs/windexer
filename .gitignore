@@ -8,4 +8,5 @@ Cargo.lock
 /data
 /config/environments/*.toml
 !/config/environments/*.example.toml
+test-data/
 test-ledger/
