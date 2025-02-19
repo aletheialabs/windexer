@@ -43,16 +43,21 @@ pub struct RelayerNodeConfig {
 
 pub trait NodeConfig: Any {
     fn get_node_type(&self) -> NodeType;
+    fn get_config(&self) -> &dyn NodeConfig;
+    fn get_keypair(&self) -> &SerializableKeypair;
     fn get_listen_addr(&self) -> &SocketAddr;
     fn get_bootstrap_peers(&self) -> &Vec<String>;
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
 }
 
 impl NodeConfig for PublisherNodeConfig {
     fn get_node_type(&self) -> NodeType {
         NodeType::PUBLISHER
+    }
+    fn get_config(&self) -> &dyn NodeConfig {
+        self
+    }
+    fn get_keypair(&self) -> &SerializableKeypair {
+        &self.keypair
     }
     fn get_listen_addr(&self) -> &SocketAddr {
         &self.listen_addr
@@ -65,6 +70,12 @@ impl NodeConfig for PublisherNodeConfig {
 impl NodeConfig for RelayerNodeConfig {
     fn get_node_type(&self) -> NodeType {
         NodeType::RELAYER
+    }
+    fn get_config(&self) -> &dyn NodeConfig {
+        self
+    }
+    fn get_keypair(&self) -> &SerializableKeypair {
+        &self.keypair
     }
     fn get_listen_addr(&self) -> &SocketAddr {
         &self.listen_addr

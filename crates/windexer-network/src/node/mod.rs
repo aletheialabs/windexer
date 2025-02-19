@@ -44,9 +44,7 @@ use {
 };
 
 use std::convert::TryInto;
-use libp2p::identity::Keypair;
 use libp2p::SwarmBuilder;
-use windexer_common::config::{PublisherNodeConfig, RelayerNodeConfig};
 
 pub fn convert_keypair(solana_keypair: &SolanaKeypair) -> identity::Keypair {
     let full_bytes = solana_keypair.to_bytes();
@@ -120,11 +118,7 @@ impl Node {
         config: Box<dyn NodeConfig>,
         staking_config: StakingConfig,
     ) -> Result<(Self, mpsc::Sender<()>)> {
-        let keypair = match config.get_node_type() {
-            NodeType::PUBLISHER => config.as_ref().as_any().downcast_ref::<PublisherNodeConfig>().unwrap(),
-            NodeType::RELAYER => config.as_ref().as_any().downcast_ref::<RelayerNodeConfig>().unwrap(),
-        }.keypair.to_keypair()?;
-
+        let keypair = config.get_keypair().to_keypair()?;
         let libp2p_keypair = convert_keypair(&keypair);
         let peer_id = PeerId::from(libp2p_keypair.public());
         
@@ -227,17 +221,27 @@ impl Node {
 
         {
             let mut swarm = self.swarm.lock().await;
-            swarm.listen_on(addr)?;
-
-            for addr in self.config.get_bootstrap_peers() {
-                let remote: Multiaddr = addr.parse()?;
-                match swarm.dial(remote.clone()) {
-                    Ok(_) => info!("Dialing bootstrap peer {}", remote),
-                    Err(e) => warn!("Failed to dial {}: {}", remote, e),
+            match &mut *swarm {
+                NodeSwarm::Publisher(swarm) => {
+                    swarm.listen_on(addr)?;
+                    for addr in self.config.get_bootstrap_peers() {
+                        let remote: Multiaddr = addr.parse()?;
+                        if let Err(e) = swarm.dial(remote.clone()) {
+                            warn!("Failed to dial publisher {}: {}", remote, e);
+                        }
+                    }
+                }
+                NodeSwarm::Relayer(swarm) => {
+                    swarm.listen_on(addr)?;
+                    for addr in self.config.get_bootstrap_peers() {
+                        let remote: Multiaddr = addr.parse()?;
+                        if let Err(e) = swarm.dial(remote.clone()) {
+                            warn!("Failed to dial relayer{}: {}", remote, e);
+                        }
+                    }
                 }
             }
         }
-
         self.run().await
     }
 
@@ -256,11 +260,21 @@ impl Node {
                 }
 
                 // Fix: Store swarm in a variable and use proper pinning
+                // Can't use two async blocks with the same type in the same select
                 event = {
                     let mut swarm = self.swarm.lock().await;
-                    Box::pin(async move {
-                        StreamExt::next(&mut *swarm).await
-                    })
+                    match &mut *swarm {
+                        NodeSwarm::Publisher(swarm) => {
+                            Box::pin(async move {
+                                StreamExt::next(&mut *swarm).await
+                            })
+                        }
+                        NodeSwarm::Relayer(swarm) => {
+                            Box::pin(async move {
+                                StreamExt::next(&mut *swarm).await
+                            })
+                        }
+                    }
                 } => {
                     if let Some(event) = event {
                         self.handle_swarm_event(event).await?;
@@ -391,7 +405,7 @@ impl Node {
                 }
             }
             _ => {}
-        }mf
+        }
         Ok(())
     }
 
