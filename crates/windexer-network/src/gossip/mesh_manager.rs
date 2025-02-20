@@ -64,7 +64,9 @@ impl MeshManager {
             } else if size < self.config.mesh_n_low {
                 debug!("Mesh size too low for topic {:?}: {}", topic, size);
                 self.graft_mesh_peers(topic);
+                self.prune_mesh_peers(topic);
             }
+            debug!("")
         }
     }
 
