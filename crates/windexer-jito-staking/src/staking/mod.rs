@@ -2,7 +2,6 @@
 
 use solana_sdk::pubkey::Pubkey;
 use anyhow::Result;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 mod delegation;

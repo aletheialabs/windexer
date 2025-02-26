@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
         keypair: SerializableKeypair::new(&Keypair::new()),
         geyser_plugin_config: None,
         metrics_addr: Some(format!("127.0.0.1:{}", metrics_port).parse()?),
-    };
+        };
 
     let staking_config = StakingConfig {
         min_stake: 100_000, // 100k minimum stake

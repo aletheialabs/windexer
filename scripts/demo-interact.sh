@@ -1,4 +1,3 @@
-# scripts/demo-interact.sh
 #!/bin/bash
 
 # Delegate to node 0 (bootstrap node)
