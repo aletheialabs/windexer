@@ -41,6 +41,25 @@ impl DelegationManager {
             .unwrap_or_default()
     }
 
+    pub fn get_staker_delegations(&self, staker: &Pubkey) -> Vec<(Pubkey, u64)> {
+        self.delegations
+            .iter()
+            .flat_map(|(operator, delegations)| {
+                delegations
+                    .iter()
+                    .filter(|(s, _)| s == staker)
+                    .map(|(_, amount)| (*operator, *amount))
+            })
+            .collect()
+    }
+
+    pub fn get_all_delegations(&self) -> Vec<(Pubkey, Vec<(Pubkey, u64)>)> {
+        self.delegations
+            .iter()
+            .map(|(operator, delegations)| (operator.clone(), delegations.clone()))
+            .collect()
+    }
+
     pub fn remove_delegation(
         &mut self,
         operator: &Pubkey,

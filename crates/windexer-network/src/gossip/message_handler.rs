@@ -84,6 +84,24 @@ impl MessageHandler {
         self.message_cache.push_back(entry);
         self.seen_messages.insert(message_id);
     }
+    fn set_max_cache_size(&mut self, max_cache_size: usize) {
+        self.max_cache_size = max_cache_size;
+        debug!("Setting max cache");
+        self.prune_cache();
+    }
+
+    fn get_max_cache_size(&self) -> usize {
+        self.max_cache_size
+    }
+
+    fn get_cache_size(&self) -> usize {
+        self.message_cache.len()
+    }
+
+    fn get_cache_entries(&self) -> Vec<MessageCacheEntry> {
+        self.message_cache.iter().collect()
+    }
+
 
     fn prune_cache(&mut self) {
         let now = std::time::Instant::now();
