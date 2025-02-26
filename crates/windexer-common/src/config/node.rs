@@ -9,8 +9,8 @@ use {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NodeType {
-    PUBLISHER,
-    RELAYER,
+    Publisher,
+    Relayer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ pub struct RelayerNodeConfig {
     pub metrics_addr: Option<SocketAddr>,
 }
 
-pub trait NodeConfig: Any {
+pub trait NodeConfig: Any + std::fmt::Debug {
     fn get_node_type(&self) -> NodeType;
     fn get_config(&self) -> &dyn NodeConfig;
     fn get_keypair(&self) -> &SerializableKeypair;
@@ -51,7 +51,7 @@ pub trait NodeConfig: Any {
 
 impl NodeConfig for PublisherNodeConfig {
     fn get_node_type(&self) -> NodeType {
-        NodeType::PUBLISHER
+        NodeType::Publisher
     }
     fn get_config(&self) -> &dyn NodeConfig {
         self
@@ -69,7 +69,7 @@ impl NodeConfig for PublisherNodeConfig {
 
 impl NodeConfig for RelayerNodeConfig {
     fn get_node_type(&self) -> NodeType {
-        NodeType::RELAYER
+        NodeType::Relayer
     }
     fn get_config(&self) -> &dyn NodeConfig {
         self
@@ -94,7 +94,7 @@ impl PublisherNodeConfig {
     ) -> Self {
         Self {
             node_id: node_id.to_string(),
-            node_type: NodeType::PUBLISHER,
+            node_type: NodeType::Publisher,
             listen_addr: format!("127.0.0.1:{}", port).parse().unwrap(),
             rpc_addr: format!("127.0.0.1:{}", rpc_port).parse().unwrap(),
             bootstrap_peers,
@@ -116,7 +116,7 @@ impl RelayerNodeConfig {
     ) -> Self {
         Self {
             node_id: node_id.to_string(),
-            node_type: NodeType::RELAYER,
+            node_type: NodeType::Relayer,
             listen_addr: format!("127.0.0.1:{}", port).parse().unwrap(),
             rpc_addr: format!("127.0.0.1:{}", rpc_port).parse().unwrap(),
             bootstrap_peers,

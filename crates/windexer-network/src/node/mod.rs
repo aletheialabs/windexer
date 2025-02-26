@@ -8,22 +8,12 @@ use {
     anyhow::{anyhow, Context, Result},
     futures::StreamExt,
     libp2p::{
-        core::upgrade,
-        gossipsub::{
+        core::upgrade, gossipsub::{
             self, 
             Behaviour as GossipsubBehaviour,
             MessageAuthenticity,
             ValidationMode,
-        },
-        mdns::{self, tokio::Behaviour as MdnsBehaviour},
-        noise,
-        swarm::{NetworkBehaviour, SwarmEvent, Swarm, Config as SwarmConfig},
-        tcp,
-        yamux,
-        Multiaddr,
-        PeerId,
-        Transport,
-        identity,
+        }, identity, mdns::{self, tokio::Behaviour as MdnsBehaviour}, noise, swarm::{Config as SwarmConfig, NetworkBehaviour, Swarm, SwarmEvent}, tcp, yamux, Multiaddr, PeerId, Transport
     },
     solana_sdk::{
         pubkey::Pubkey,
@@ -44,7 +34,6 @@ use {
 };
 
 use std::convert::TryInto;
-use libp2p::SwarmBuilder;
 
 pub fn convert_keypair(solana_keypair: &SolanaKeypair) -> identity::Keypair {
     let full_bytes = solana_keypair.to_bytes();
@@ -55,15 +44,10 @@ pub fn convert_keypair(solana_keypair: &SolanaKeypair) -> identity::Keypair {
         .expect("Valid keypair conversion")
 }
 
-// Add new behavior types for different node roles
+// Combined network behavior using both gossipsub and mDNS
 #[derive(NetworkBehaviour)]
-struct PublisherBehaviour {
-    gossipsub: GossipsubBehaviour,
-    mdns: MdnsBehaviour,
-}
-
-#[derive(NetworkBehaviour)]
-struct RelayerBehaviour {
+#[behaviour(out_event = "NodeEvent")]
+struct NodeBehaviour {
     gossipsub: GossipsubBehaviour,
     mdns: MdnsBehaviour,
 }
@@ -87,38 +71,34 @@ impl From<mdns::Event> for NodeEvent {
     }
 }
 
-// Enum to hold different swarm types
-enum NodeSwarm {
-    Publisher(Swarm<PublisherBehaviour>),
-    Relayer(Swarm<RelayerBehaviour>),
-}
-
-// Update Node struct to handle different swarm types
+// Add these derives to make Node thread-safe
 pub struct Node {
     config: Box<dyn NodeConfig>,
-    swarm: Arc<Mutex<NodeSwarm>>,
+    swarm: Arc<Mutex<Swarm<NodeBehaviour>>>,
     metrics: Arc<RwLock<Metrics>>,
     known_peers: Arc<RwLock<HashSet<PeerId>>>,
     shutdown_rx: mpsc::Receiver<()>,
     staking_service: Arc<JitoStakingService>,
 }
 
-// impl std::fmt::Debug for Node {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("Node")
-//             .field("config", &self.config)
-//             .field("metrics", &self.metrics)
-//             .field("known_peers", &self.known_peers)
-//             .finish_non_exhaustive()
-//     }
-// }
+// Implement Debug manually
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("config", &self.config)
+            .field("metrics", &self.metrics)
+            .field("known_peers", &self.known_peers)
+            .finish_non_exhaustive()
+    }
+}
 
 impl Node {
     pub async fn new(
         config: Box<dyn NodeConfig>,
         staking_config: StakingConfig,
     ) -> Result<(Self, mpsc::Sender<()>)> {
-        let keypair = config.get_keypair().to_keypair()?;
+        let keypair = config.get_keypair().to_keypair()
+            .context("Failed to deserialize node keypair")?;
         let libp2p_keypair = convert_keypair(&keypair);
         let peer_id = PeerId::from(libp2p_keypair.public());
         
@@ -152,51 +132,45 @@ impl Node {
         let mdns = MdnsBehaviour::new(Default::default(), peer_id)
             .map_err(|e| anyhow!("Failed to create mDNS: {}", e))?;
 
-        // Building two different swarms for publisher and relayer
-        let swarm = match config.get_node_type() {
-            NodeType::PUBLISHER => {
-                let behaviour = PublisherBehaviour {
-                    gossipsub,
-                    mdns,
-                };
-                NodeSwarm::Publisher(
-                    SwarmBuilder::with_existing_identity(libp2p_keypair)
-                        .with_tokio()
-                        .with_tcp(
-                            tcp::Config::default().nodelay(true),
-                            noise::Config::new,
-                            yamux::Config::default,
-                        )
-                        .map_err(|e| anyhow!("Failed to create transport: {}", e))?
-                        .with_behaviour(|_| behaviour)
-                        .map_err(|e| anyhow!("Failed to create behaviour: {}", e))?
-                        .with_swarm_config(|_| SwarmConfig::with_tokio_executor())
-                        .build()
-                )
-            }
-            NodeType::RELAYER => {
-                let behaviour = RelayerBehaviour {
-                    gossipsub,
-                    mdns,
-                };
-                NodeSwarm::Relayer(
-                    SwarmBuilder::with_existing_identity(libp2p_keypair)
-                        .with_tokio()
-                        .with_tcp(
-                            tcp::Config::default().nodelay(true),
-                            noise::Config::new,
-                            yamux::Config::default,
-                        )
-                        .map_err(|e| anyhow!("Failed to create transport: {}", e))?
-                        .with_behaviour(|_| behaviour)
-                        .map_err(|e| anyhow!("Failed to create behaviour: {}", e))?
-                        .with_swarm_config(|_| SwarmConfig::with_tokio_executor())
-                        .build()
-                )
-            }
+        let behaviour = NodeBehaviour {
+            gossipsub,
+            mdns,
         };
 
+        // Now use the original keypair for SwarmBuilder
+        let mut swarm = libp2p::SwarmBuilder::with_existing_identity(libp2p_keypair)
+            .with_tokio()
+            .with_tcp(
+                tcp::Config::default().nodelay(true),
+                noise::Config::new,
+                yamux::Config::default,
+            )
+            .map_err(|e| anyhow!("Failed to create transport: {}", e))?
+            .with_behaviour(|_| behaviour)
+            .map_err(|e| anyhow!("Failed to create behaviour: {}", e))?
+            .with_swarm_config(|_| SwarmConfig::with_tokio_executor())
+            .build();
+
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
+        
+        let publisher_topic = gossipsub::IdentTopic::new("publisher");
+        let relayer_topic = gossipsub::IdentTopic::new("relayer");
+        let common_topic = gossipsub::IdentTopic::new("common");
+
+        match config.get_node_type() {
+            NodeType::Publisher => {
+                swarm.behaviour_mut().gossipsub.subscribe(&publisher_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to publisher topic: {}", e))?;
+                swarm.behaviour_mut().gossipsub.subscribe(&common_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to common topic: {}", e))?;
+            }
+            NodeType::Relayer => {
+                swarm.behaviour_mut().gossipsub.subscribe(&relayer_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to relayer topic: {}", e))?;
+                swarm.behaviour_mut().gossipsub.subscribe(&common_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to common topic: {}", e))?;
+            }
+        }
 
         Ok((
             Self {
@@ -213,6 +187,14 @@ impl Node {
 
     pub async fn start(&mut self) -> Result<()> {
         info!("Starting node on {}", self.config.get_listen_addr());
+        match self.config.get_node_type() {
+            NodeType::Publisher => {
+                info!("Starting publisher node");
+            }
+            NodeType::Relayer => {
+                info!("Starting relayer node");
+            }
+        }
 
         let addr = format!("/ip4/{}/tcp/{}", 
             self.config.get_listen_addr().ip(),
@@ -221,27 +203,17 @@ impl Node {
 
         {
             let mut swarm = self.swarm.lock().await;
-            match &mut *swarm {
-                NodeSwarm::Publisher(swarm) => {
-                    swarm.listen_on(addr)?;
-                    for addr in self.config.get_bootstrap_peers() {
-                        let remote: Multiaddr = addr.parse()?;
-                        if let Err(e) = swarm.dial(remote.clone()) {
-                            warn!("Failed to dial publisher {}: {}", remote, e);
-                        }
-                    }
-                }
-                NodeSwarm::Relayer(swarm) => {
-                    swarm.listen_on(addr)?;
-                    for addr in self.config.get_bootstrap_peers() {
-                        let remote: Multiaddr = addr.parse()?;
-                        if let Err(e) = swarm.dial(remote.clone()) {
-                            warn!("Failed to dial relayer{}: {}", remote, e);
-                        }
-                    }
+            swarm.listen_on(addr)?;
+
+            for addr in self.config.get_bootstrap_peers() {
+                let remote: Multiaddr = addr.parse()?;
+                match swarm.dial(remote.clone()) {
+                    Ok(_) => info!("Dialing bootstrap peer {}", remote),
+                    Err(e) => warn!("Failed to dial {}: {}", remote, e),
                 }
             }
         }
+
         self.run().await
     }
 
@@ -260,26 +232,16 @@ impl Node {
                 }
 
                 // Fix: Store swarm in a variable and use proper pinning
-                // Can't use two async blocks with the same type in the same select
                 event = {
                     let mut swarm = self.swarm.lock().await;
-                    match &mut *swarm {
-                        NodeSwarm::Publisher(swarm) => {
-                            Box::pin(async move {
-                                StreamExt::next(&mut *swarm).await
-                            })
-                        }
-                        NodeSwarm::Relayer(swarm) => {
-                            Box::pin(async move {
-                                StreamExt::next(&mut *swarm).await
-                            })
-                        }
-                    }
+                    Box::pin(async move {
+                        StreamExt::next(&mut *swarm).await
+                    })
                 } => {
                     if let Some(event) = event {
                         self.handle_swarm_event(event).await?;
                     }
-                }
+                }   
             }
         }
 
@@ -325,25 +287,16 @@ impl Node {
         Ok(())
     }
 
-    async fn handle_swarm_event(&mut self, event: SwarmEvent<NodeEvent>) -> Result<()> {
-        match &mut self.swarm {
-            NodeSwarm::Publisher(swarm) => {
-                // Handle publisher-specific events
-                match event {
-                    SwarmEvent::Behaviour(PublisherEvent::Gossipsub(event)) => {
-                        self.handle_publisher_gossip(event).await?;
-                    }
-                    // ... other publisher events
-                }
+    async fn handle_swarm_event(
+        &mut self,
+        event: SwarmEvent<NodeEvent>
+    ) -> Result<()> {
+        match event {
+            SwarmEvent::Behaviour(NodeEvent::Gossipsub(event)) => {
+                self.handle_gossip_event(event).await?;
             }
-            NodeSwarm::Relayer(swarm) => {
-                // Handle relayer-specific events
-                match event {
-                    SwarmEvent::Behaviour(RelayerEvent::Gossipsub(event)) => {
-                        self.handle_relayer_gossip(event).await?;
-                    }
-                    // ... other relayer events
-                }
+            SwarmEvent::Behaviour(NodeEvent::Mdns(event)) => {
+                self.handle_mdns_event(event).await?;
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 info!("Listening on {}", address);
@@ -363,7 +316,7 @@ impl Node {
         Ok(())
     }
 
-    async fn handle_publisher_gossip(&mut self, event: gossipsub::Event) -> Result<()> {
+    async fn handle_gossip_event(&mut self, event: gossipsub::Event) -> Result<()> {
         match event {
             gossipsub::Event::Message { 
                 message_id,
@@ -386,25 +339,27 @@ impl Node {
         Ok(())
     }
 
-    async fn handle_relayer_gossip(&mut self, event: gossipsub::Event) -> Result<()> {
+    async fn handle_mdns_event(&mut self, event: mdns::Event) -> Result<()> {
         match event {
-            gossipsub::Event::Message { 
-                message_id,
-                message,
-                propagation_source,
-                ..
-            } => {
-                if self.validate_message(&message).await? {
-                    debug!("Valid message {} from {}", message_id, propagation_source);
-                    // Acquire write lock to update metrics
-                    self.metrics.write().await.increment_valid_messages();
-                } else {
-                    warn!("Invalid message {} from {}", message_id, propagation_source);
-                    // Acquire write lock to update metrics
-                    self.metrics.write().await.increment_invalid_messages();
+            mdns::Event::Discovered(peers) => {
+                for (peer_id, addr) in peers {
+                    debug!("Discovered peer {} at {}", peer_id, addr);
+                    let known_peers = self.known_peers.read().await;
+                    if !known_peers.contains(&peer_id) {
+                        drop(known_peers);
+                        if let Err(e) = self.swarm.lock().await.dial(addr) {
+                            warn!("Failed to dial discovered peer {}: {}", peer_id, e);
+                        }
+                    }
                 }
             }
-            _ => {}
+            mdns::Event::Expired(peers) => {
+                for (peer_id, _) in peers {
+                    debug!("Lost peer {}", peer_id);
+                    let mut known_peers = self.known_peers.write().await;
+                    known_peers.remove(&peer_id);
+                }
+            }
         }
         Ok(())
     }

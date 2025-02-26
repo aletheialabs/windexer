@@ -1,6 +1,6 @@
 // examples/node.rs
 use {
-    anyhow::Result,
+    anyhow::{Result, anyhow},
     clap::Parser,
     solana_sdk::signer::keypair::Keypair,
     std::{
@@ -29,7 +29,7 @@ use {
 )]
 struct Args {
     /// Node type (publisher, relayer)
-    #[clap(long, Option("publisher", "relayer"))]
+    #[clap(long, default_value = "publisher", value_parser = ["publisher", "relayer"])]
     node_type: String,
 
     /// Node index (0, 1, 2)
@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
     let config: Box<dyn NodeConfig> = match args.node_type.to_lowercase().as_str() {
         "publisher" => Box::new(PublisherNodeConfig {
             node_id: format!("publisher_{}", args.index),
-            node_type: NodeType::PUBLISHER,
+            node_type: NodeType::Publisher,
             listen_addr: format!("127.0.0.1:{}", port).parse()?,
             rpc_addr: format!("127.0.0.1:{}", rpc_port).parse()?,
             bootstrap_peers: args.bootstrap_peers,
@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
         }),
         "relayer" => Box::new(RelayerNodeConfig {
             node_id: format!("relayer_{}", args.index),
-            node_type: NodeType::RELAYER,
+            node_type: NodeType::Relayer,
             listen_addr: format!("127.0.0.1:{}", port).parse()?,
             rpc_addr: format!("127.0.0.1:{}", rpc_port).parse()?,
             bootstrap_peers: args.bootstrap_peers,
