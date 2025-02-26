@@ -17,22 +17,18 @@ authors = ["Vivek <31vivekpal@gmail.com>"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# Solana dependencies - all aligned to 1.18.26
-solana-sdk = "=1.18.26"
-solana-program = "=1.18.26"
-solana-geyser-plugin-interface = "=1.18.26"
-solana-transaction-status = "=1.18.26"
-solana-zk-token-sdk = "=1.18.26"
+solana-sdk = "^2.2.1"
+solana-program = "^2.2.1"
+solana-geyser-plugin-interface = "^1.18.26"
+solana-transaction-status = "^2.2.0"
+solana-zk-token-sdk = "^2.2.0"
 jito-restaking-sdk = "0.0.1"
 jito-restaking-core = "0.0.1" 
 jito-vault-sdk = "0.0.1"
 
-# Use spl-token-2022 version compatible with Solana 1.18.26
-spl-token-2022 = "=1.18.26"
-spl-token-2022-zk-token-sdk = "=1.18.26"
+spl-token-2022 = "7.0.0"
 
-# Network stack with older libp2p for compatibility
-libp2p = { version = "0.51", features = [
+libp2p = { version = "0.55", features = [
     "tokio",
     "tcp",
     "noise",
@@ -44,7 +40,6 @@ libp2p = { version = "0.51", features = [
     "identify"
 ]}
 
-# Other dependencies remain unchanged
 tokio = { version = "1.32", features = ["full"] }
 tokio-tungstenite = "0.26.1"
 tungstenite = "0.26.1"
@@ -68,5 +63,4 @@ async-trait = "0.1.74"
 chrono = "0.4"
 
 [patch.crates-io]
-# Only patch what's absolutely necessary
 curve25519-dalek = { git = "https://github.com/dalek-cryptography/curve25519-dalek", rev = "8274d5cbb6fc3f38cdc742b4798173895cd2a290" }
