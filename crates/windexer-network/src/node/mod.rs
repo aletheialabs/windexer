@@ -8,22 +8,12 @@ use {
     anyhow::{anyhow, Context, Result},
     futures::StreamExt,
     libp2p::{
-        core::upgrade,
-        gossipsub::{
+        core::upgrade, gossipsub::{
             self, 
             Behaviour as GossipsubBehaviour,
             MessageAuthenticity,
             ValidationMode,
-        },
-        mdns::{self, tokio::Behaviour as MdnsBehaviour},
-        noise,
-        swarm::{NetworkBehaviour, SwarmEvent, Swarm, Config as SwarmConfig},
-        tcp,
-        yamux,
-        Multiaddr,
-        PeerId,
-        Transport,
-        identity,
+        }, identity, mdns::{self, tokio::Behaviour as MdnsBehaviour}, noise, swarm::{Config as SwarmConfig, NetworkBehaviour, Swarm, SwarmEvent}, tcp, yamux, Multiaddr, PeerId, Transport
     },
     solana_sdk::{
         pubkey::Pubkey,
@@ -35,11 +25,11 @@ use {
         time::Duration,
     },
     tokio::{
-        sync::{mpsc, RwLock, Mutex},
+        sync::{mpsc, Mutex, RwLock},
         time,
     },
     tracing::{debug, info, warn},
-    windexer_common::config::NodeConfig,
+    windexer_common::config::{NodeConfig, NodeType},
     windexer_jito_staking::{JitoStakingService, StakingConfig},
 };
 
@@ -83,7 +73,7 @@ impl From<mdns::Event> for NodeEvent {
 
 // Add these derives to make Node thread-safe
 pub struct Node {
-    config: NodeConfig,
+    config: Box<dyn NodeConfig>,
     swarm: Arc<Mutex<Swarm<NodeBehaviour>>>,
     metrics: Arc<RwLock<Metrics>>,
     known_peers: Arc<RwLock<HashSet<PeerId>>>,
@@ -104,10 +94,10 @@ impl std::fmt::Debug for Node {
 
 impl Node {
     pub async fn new(
-        config: NodeConfig,
+        config: Box<dyn NodeConfig>,
         staking_config: StakingConfig,
     ) -> Result<(Self, mpsc::Sender<()>)> {
-        let keypair = config.keypair.to_keypair()
+        let keypair = config.get_keypair().to_keypair()
             .context("Failed to deserialize node keypair")?;
         let libp2p_keypair = convert_keypair(&keypair);
         let peer_id = PeerId::from(libp2p_keypair.public());
@@ -148,7 +138,7 @@ impl Node {
         };
 
         // Now use the original keypair for SwarmBuilder
-        let swarm = libp2p::SwarmBuilder::with_existing_identity(libp2p_keypair)
+        let mut swarm = libp2p::SwarmBuilder::with_existing_identity(libp2p_keypair)
             .with_tokio()
             .with_tcp(
                 tcp::Config::default().nodelay(true),
@@ -162,6 +152,25 @@ impl Node {
             .build();
 
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
+        
+        let publisher_topic = gossipsub::IdentTopic::new("publisher");
+        let relayer_topic = gossipsub::IdentTopic::new("relayer");
+        let common_topic = gossipsub::IdentTopic::new("common");
+
+        match config.get_node_type() {
+            NodeType::Publisher => {
+                swarm.behaviour_mut().gossipsub.subscribe(&publisher_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to publisher topic: {}", e))?;
+                swarm.behaviour_mut().gossipsub.subscribe(&common_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to common topic: {}", e))?;
+            }
+            NodeType::Relayer => {
+                swarm.behaviour_mut().gossipsub.subscribe(&relayer_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to relayer topic: {}", e))?;
+                swarm.behaviour_mut().gossipsub.subscribe(&common_topic)
+                    .map_err(|e| anyhow!("Failed to subscribe to common topic: {}", e))?;
+            }
+        }
 
         Ok((
             Self {
@@ -177,18 +186,26 @@ impl Node {
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        info!("Starting node on {}", self.config.listen_addr);
+        info!("Starting node on {}", self.config.get_listen_addr());
+        match self.config.get_node_type() {
+            NodeType::Publisher => {
+                info!("Starting publisher node");
+            }
+            NodeType::Relayer => {
+                info!("Starting relayer node");
+            }
+        }
 
         let addr = format!("/ip4/{}/tcp/{}", 
-            self.config.listen_addr.ip(),
-            self.config.listen_addr.port()
+            self.config.get_listen_addr().ip(),
+            self.config.get_listen_addr().port()
         ).parse::<Multiaddr>()?;
 
         {
             let mut swarm = self.swarm.lock().await;
             swarm.listen_on(addr)?;
 
-            for addr in &self.config.bootstrap_peers {
+            for addr in self.config.get_bootstrap_peers() {
                 let remote: Multiaddr = addr.parse()?;
                 match swarm.dial(remote.clone()) {
                     Ok(_) => info!("Dialing bootstrap peer {}", remote),
@@ -224,7 +241,7 @@ impl Node {
                     if let Some(event) = event {
                         self.handle_swarm_event(event).await?;
                     }
-                }
+                }   
             }
         }
 
