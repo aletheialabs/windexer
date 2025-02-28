@@ -13,17 +13,33 @@ all: build
 build:
 	@$(CARGO) build --workspace
 
-run-node-%: build
+run-publisher-%: build
 	@$(CARGO) run --bin node -- \
+		--node-type publisher \
 		--index $* \
 		--base-port $(BASE_PORT) \
+		--enable-tip-route
+
+run-relayer-%: build
+	@$(CARGO) run --bin node -- \
+		--node-type relayer \
+		--index $* \
+		--base-port $$(( $(BASE_PORT) + 100 )) \
 		--enable-tip-route
 
 run-local-network: build
 	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
 		$(CARGO) run --bin node -- \
+			--node-type publisher \
 			--index $$i \
 			--base-port $(BASE_PORT) \
+			--enable-tip-route & \
+	done
+	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
+		$(CARGO) run --bin node -- \
+			--node-type relayer \
+			--index $$i \
+			--base-port $$(( $(BASE_PORT) + 100 )) \
 			--enable-tip-route & \
 	done
 
