@@ -88,7 +88,6 @@ impl ConsensusProtocol {
         let total_stake = self.get_total_active_stake().await?;
         let vote_stake = self.get_vote_stake(block_hash, &*validator_set).await?;
 
-        // Require 2/3 of stake for consensus
         if vote_stake * 3 > total_stake * 2 {
             self.message_tx
                 .send(ConsensusMessage::Commit(*block_hash))

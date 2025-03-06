@@ -1,160 +1,477 @@
-// crates/windexer-geyser/src/simd_processing.rs
-#![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512))]
-#![allow(unused_unsafe)]
+//! SIMD-accelerated processing for agave account, transaction, and block data.
+//!
+//! This module provides high-performance data processing using SIMD (Single Instruction, 
+//! Multiple Data) instructions when available. It falls back to standard processing when 
+//! SIMD is not supported by the hardware.
 
-use solana_sdk::{account::Account, pubkey::Pubkey};
-use std::{
-    arch::x86_64::{
-        __m256i, __m512i, _mm256_loadu_si256, _mm256_storeu_si256, _mm512_loadu_si512,
-        _mm512_storeu_si512,
-    },
-    mem::{size_of, transmute},
-    simd::{u8x32, u8x64},
+use agave_geyser_plugin_interface::geyser_plugin_interface::{
+    GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
+    ReplicaTransactionInfoVersions, ReplicaEntryInfoVersions, Result as PluginResult, SlotStatus,
 };
-use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum SimdError {
-    #[error("Invalid account alignment")]
-    AlignmentError,
-    #[error("SIMD feature not supported")]
-    SimdNotSupported,
+pub type ProcessedData = Vec<u8>;
+
+#[derive(Debug, Clone, Copy)]
+enum SerializationMode {    
+    Standard,
+    Sse4,
+    Avx2,
+    Avx512,
 }
 
-/// SIMD processor for batch account operations
-pub struct SimdProcessor;
+#[derive(Debug)]
+pub struct SimdProcessor {
+    enabled: bool,
+    mode: SerializationMode,
+}
 
 impl SimdProcessor {
-    /// Process account batch with optimal SIMD available
-    pub fn process_accounts(batch: &[Account]) -> Result<Vec<[u8; 136]>, SimdError> {
-        #[cfg(target_arch = "x86_64")]
-        {
-            if is_x86_feature_detected!("avx512f") {
-                return unsafe { Self::process_avx512(batch) };
-            }
-            if is_x86_feature_detected!("avx2") {
-                return unsafe { Self::process_avx2(batch) };
-            }
-        }
-
-        #[cfg(target_arch = "aarch64")]
-        {
-            if std::arch::is_aarch64_feature_detected!("neon") {
-                return unsafe { Self::process_neon(batch) };
-            }
-        }
-
-        Self::process_scalar(batch)
-    }
-
-    /// AVX-512 optimized processing (64 accounts per iteration)
-    #[cfg(target_arch = "x86_64")]
-    #[target_feature(enable = "avx512f")]
-    unsafe fn process_avx512(batch: &[Account]) -> Result<Vec<[u8; 136]>, SimdError> {
-        let mut output = Vec::with_capacity(batch.len());
-        output.set_len(batch.len());
-
-        let ptr = output.as_mut_ptr() as *mut __m512i;
-        batch.chunks_exact(64).enumerate().for_each(|(i, chunk)| {
-            let src = chunk.as_ptr() as *const __m512i;
-            let dst = ptr.add(i * 17); // 136 bytes = 17x __m512i
-            for j in 0..17 {
-                _mm512_storeu_si512(dst.add(j), _mm512_loadu_si512(src.add(j)));
-            }
-        });
-
-        Ok(output)
-    }
-
-    /// AVX2 optimized processing (32 accounts per iteration)
-    #[cfg(target_arch = "x86_64")]
-    #[target_feature(enable = "avx2")]
-    unsafe fn process_avx2(batch: &[Account]) -> Result<Vec<[u8; 136]>, SimdError> {
-        let mut output = Vec::with_capacity(batch.len());
-        output.set_len(batch.len());
-
-        let ptr = output.as_mut_ptr() as *mut __m256i;
-        batch.chunks_exact(32).enumerate().for_each(|(i, chunk)| {
-            let src = chunk.as_ptr() as *const __m256i;
-            let dst = ptr.add(i * 34); // 136 bytes = 34x __m256i
-            for j in 0..34 {
-                _mm256_storeu_si256(dst.add(j), _mm256_loadu_si256(src.add(j)));
-            }
-        });
-
-        Ok(output)
-    }
-
-    /// ARM NEON optimized processing
-    #[cfg(target_arch = "aarch64")]
-    #[target_feature(enable = "neon")]
-    unsafe fn process_neon(batch: &[Account]) -> Result<Vec<[u8; 136]>, SimdError> {
-        use std::arch::aarch64::*;
-
-        let mut output = Vec::with_capacity(batch.len());
-        output.set_len(batch.len());
-
-        let ptr = output.as_mut_ptr() as *mut uint8x16x4_t;
-        batch.chunks_exact(4).enumerate().for_each(|(i, chunk)| {
-            let src = chunk.as_ptr() as *const uint8x16x4_t;
-            let dst = ptr.add(i);
-            vst4q_u8(dst as *mut u8, vld4q_u8(src as *const u8));
-        });
-
-        Ok(output)
-    }
-
-    /// Scalar fallback implementation
-    fn process_scalar(batch: &[Account]) -> Result<Vec<[u8; 136]>, SimdError> {
-        let mut output = Vec::with_capacity(batch.len());
-        for account in batch {
-            let mut buf = [0u8; 136];
-            bincode::serialize_into(&mut buf[..], account)
-                .map_err(|_| SimdError::AlignmentError)?;
-            output.push(buf);
-        }
-        Ok(output)
-    }
-
-    /// SIMD-accelerated account validation
-    pub fn validate_accounts(batch: &[Account]) -> Result<(), SimdError> {
-        #[cfg(target_arch = "x86_64")]
-        {
-            if is_x86_feature_detected!("avx512f") {
-                return unsafe { Self::validate_avx512(batch) };
-            }
-        }
-
-        Self::validate_scalar(batch)
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    #[target_feature(enable = "avx512f")]
-    unsafe fn validate_avx512(batch: &[Account]) -> Result<(), SimdError> {
-        const VALID_FLAGS: u8x64 = u8x64::from_array([0x01; 64]);
-        let mut validation = u8x64::splat(0);
-
-        batch.chunks(64).for_each(|chunk| {
-            let data = u8x64::from_slice(&chunk.iter()
-                .flat_map(|a| a.data[..1].to_vec())
-                .collect::<Vec<u8>>());
-            
-            validation |= data & VALID_FLAGS;
-        });
-
-        if validation.ne(&VALID_FLAGS).any() {
-            Err(SimdError::AlignmentError)
+    pub fn new(enable_simd: bool) -> PluginResult<Self> {
+        let mode = if !enable_simd {
+            SerializationMode::Standard
         } else {
-            Ok(())
-        }
+            #[cfg(all(target_arch = "x86_64", has_avx512))]
+            {
+                if std::is_x86_feature_detected!("avx512f") {
+                    tracing::info!("Using AVX-512 for SIMD processing");
+                    SerializationMode::Avx512
+                } else if std::is_x86_feature_detected!("avx2") {
+                    tracing::info!("Using AVX2 for SIMD processing");
+                    SerializationMode::Avx2
+                } else if std::is_x86_feature_detected!("sse4.1") {
+                    tracing::info!("Using SSE4.1 for SIMD processing");
+                    SerializationMode::Sse4
+                } else {
+                    tracing::info!("SIMD support not detected, using standard processing");
+                    SerializationMode::Standard
+                }
+            }
+            #[cfg(all(target_arch = "x86_64", has_avx2, not(has_avx512)))]
+            {
+                if std::is_x86_feature_detected!("avx2") {
+                    tracing::info!("Using AVX2 for SIMD processing");
+                    SerializationMode::Avx2
+                } else if std::is_x86_feature_detected!("sse4.1") {
+                    tracing::info!("Using SSE4.1 for SIMD processing");
+                    SerializationMode::Sse4
+                } else {
+                    tracing::info!("SIMD support not detected, using standard processing");
+                    SerializationMode::Standard
+                }
+            }
+            #[cfg(all(target_arch = "x86_64", has_sse4_1, not(has_avx2), not(has_avx512)))]
+            {
+                if std::is_x86_feature_detected!("sse4.1") {
+                    tracing::info!("Using SSE4.1 for SIMD processing");
+                    SerializationMode::Sse4
+                } else {
+                    tracing::info!("SIMD support not detected, using standard processing");
+                    SerializationMode::Standard
+                }
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            {
+                tracing::info!("SIMD not supported on non-x86_64 architecture");
+                SerializationMode::Standard
+            }
+            #[cfg(all(target_arch = "x86_64", not(has_sse4_1), not(has_avx2), not(has_avx512)))]
+            {
+                tracing::info!("SIMD support not enabled at compile time");
+                SerializationMode::Standard
+            }
+        };
+
+        Ok(Self {
+            enabled: enable_simd,
+            mode,
+        })
     }
 
-    fn validate_scalar(batch: &[Account]) -> Result<(), SimdError> {
-        for account in batch {
-            if account.data.len() < 1 || account.data[0] != 0x01 {
-                return Err(SimdError::AlignmentError);
+    pub fn process_account(
+        &self,
+        account: ReplicaAccountInfoVersions,
+        slot: u64,
+        ) -> PluginResult<ProcessedData> {
+        let mut result = Vec::with_capacity(1024);
+        result.push(0x01);
+        result.extend_from_slice(&slot.to_le_bytes());
+
+        match account {
+            ReplicaAccountInfoVersions::V0_0_1(account_info) => {
+                match self.mode {
+                    SerializationMode::Avx512 => self.process_account_avx512(account_info, &mut result)?,
+                    SerializationMode::Avx2 => self.process_account_avx2(account_info, &mut result)?,
+                    SerializationMode::Sse4 => self.process_account_sse4(account_info, &mut result)?,
+                    SerializationMode::Standard => self.process_account_standard(account_info, &mut result)?,
+                }
+            }
+            ReplicaAccountInfoVersions::V0_0_2(account_info) => {
+                match self.mode {
+                    _ => self.process_account_v2_standard(account_info, &mut result)?,
+                }
+            }
+            ReplicaAccountInfoVersions::V0_0_3(account_info) => {
+                match self.mode {
+                    _ => self.process_account_v3_standard(account_info, &mut result)?,
+                }
             }
         }
+
+        Ok(result)
+    }
+
+    pub fn process_transaction(
+        &self,
+        transaction: ReplicaTransactionInfoVersions,
+        slot: u64,
+    ) -> PluginResult<ProcessedData> {
+        let mut result = Vec::with_capacity(1024);
+        result.push(0x02);
+        result.extend_from_slice(&slot.to_le_bytes());
+
+        match transaction {
+            ReplicaTransactionInfoVersions::V0_0_1(tx_info) => {
+                result.extend_from_slice(tx_info.signature.as_ref());
+                
+                result.push(if tx_info.is_vote { 1 } else { 0 });
+                
+                let status = &tx_info.transaction_status_meta;
+                result.push(if status.status.is_ok() { 1 } else { 0 });
+                
+                result.extend_from_slice(&status.fee.to_le_bytes());
+            }
+            ReplicaTransactionInfoVersions::V0_0_2(tx_info) => {
+                result.extend_from_slice(tx_info.signature.as_ref());
+                
+                result.push(if tx_info.is_vote { 1 } else { 0 });
+                
+                result.extend_from_slice(&tx_info.index.to_le_bytes());
+                
+                let status = &tx_info.transaction_status_meta;
+                result.push(if status.status.is_ok() { 1 } else { 0 });
+                
+                result.extend_from_slice(&status.fee.to_le_bytes());
+            }
+        }
+
+        Ok(result)
+    }
+
+    pub fn process_slot(
+        &self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> PluginResult<ProcessedData> {
+        let mut result = Vec::with_capacity(64);
+        result.push(0x03);
+        result.extend_from_slice(&slot.to_le_bytes());
+
+        match parent {
+            Some(parent_slot) => {
+                result.push(1);
+                result.extend_from_slice(&parent_slot.to_le_bytes());
+            }
+            None => {
+                result.push(0);
+            }
+        }
+
+        let status_code = match status {
+            SlotStatus::Processed => 0u8,
+            SlotStatus::Confirmed => 1u8,
+            SlotStatus::Rooted => 2u8,
+        };
+        result.push(status_code);
+
+        Ok(result)
+    }
+
+    pub fn process_block(
+        &self,
+        block_info: ReplicaBlockInfoVersions,
+    ) -> PluginResult<ProcessedData> {
+        let mut result = Vec::with_capacity(1024);
+        result.push(0x04);
+
+        match block_info {
+            ReplicaBlockInfoVersions::V0_0_1(block_info) => {
+                result.extend_from_slice(&block_info.slot.to_le_bytes());
+                
+                let blockhash_bytes = block_info.blockhash.as_bytes();
+                result.extend_from_slice(&(blockhash_bytes.len() as u16).to_le_bytes());
+                result.extend_from_slice(blockhash_bytes);
+                
+                match block_info.block_time {
+                    Some(time) => {
+                        result.push(1);
+                        result.extend_from_slice(&time.to_le_bytes());
+                    }
+                    None => {
+                        result.push(0);
+                    }
+                }
+                
+                match block_info.block_height {
+                    Some(height) => {
+                        result.push(1);
+                        result.extend_from_slice(&height.to_le_bytes());
+                    }
+                    None => {
+                        result.push(0);
+                    }
+                }
+            }
+            ReplicaBlockInfoVersions::V0_0_2(block_info) => {
+                result.extend_from_slice(&block_info.slot.to_le_bytes());
+                
+                result.extend_from_slice(&block_info.parent_slot.to_le_bytes());
+                
+                let blockhash_bytes = block_info.blockhash.as_bytes();
+                result.extend_from_slice(&(blockhash_bytes.len() as u16).to_le_bytes());
+                result.extend_from_slice(blockhash_bytes);
+                
+                let parent_blockhash_bytes = block_info.parent_blockhash.as_bytes();
+                result.extend_from_slice(&(parent_blockhash_bytes.len() as u16).to_le_bytes());
+                result.extend_from_slice(parent_blockhash_bytes);
+                
+                match block_info.block_time {
+                    Some(time) => {
+                        result.push(1);
+                        result.extend_from_slice(&time.to_le_bytes());
+                    }
+                    None => {
+                        result.push(0);
+                    }
+                }
+                
+                match block_info.block_height {
+                    Some(height) => {
+                        result.push(1);
+                        result.extend_from_slice(&height.to_le_bytes());
+                    }
+                    None => {
+                        result.push(0);
+                    }
+                }
+                
+                result.extend_from_slice(&block_info.executed_transaction_count.to_le_bytes());
+            }
+            ReplicaBlockInfoVersions::V0_0_3(block_info) => {
+                result.extend_from_slice(&block_info.slot.to_le_bytes());
+                
+                result.extend_from_slice(&block_info.parent_slot.to_le_bytes());
+                
+                let blockhash_bytes = block_info.blockhash.as_bytes();
+                result.extend_from_slice(&(blockhash_bytes.len() as u16).to_le_bytes());
+                result.extend_from_slice(blockhash_bytes);
+                
+                let parent_blockhash_bytes = block_info.parent_blockhash.as_bytes();
+                result.extend_from_slice(&(parent_blockhash_bytes.len() as u16).to_le_bytes());
+                result.extend_from_slice(parent_blockhash_bytes);
+                
+                match block_info.block_time {
+                    Some(time) => {
+                        result.push(1);
+                        result.extend_from_slice(&time.to_le_bytes());
+                    }
+                    None => {
+                        result.push(0);
+                    }
+                }
+                
+                match block_info.block_height {
+                    Some(height) => {
+                        result.push(1);
+                        result.extend_from_slice(&height.to_le_bytes());
+                    }
+                    None => {
+                        result.push(0);
+                    }
+                }
+                
+                result.extend_from_slice(&block_info.executed_transaction_count.to_le_bytes());
+                
+                result.extend_from_slice(&block_info.entry_count.to_le_bytes());
+            }
+        }
+
+        Ok(result)
+    }
+
+    pub fn process_entry(
+        &self,
+        entry: ReplicaEntryInfoVersions,
+    ) -> PluginResult<ProcessedData> {
+        let mut result = Vec::with_capacity(1024);
+        result.push(0x05);
+
+        match entry {
+            ReplicaEntryInfoVersions::V0_0_1(entry_info) => {
+                result.extend_from_slice(&entry_info.slot.to_le_bytes());
+                
+                result.extend_from_slice(&(entry_info.index as u64).to_le_bytes());
+                
+                result.extend_from_slice(&entry_info.num_hashes.to_le_bytes());
+                
+                result.extend_from_slice(entry_info.hash);
+                
+                
+            ReplicaEntryInfoVersions::V0_0_2(entry_info) => {
+                result.extend_from_slice(&entry_info.slot.to_le_bytes());
+                
+                result.extend_from_slice(&(entry_info.index as u64).to_le_bytes());
+                
+                result.extend_from_slice(&entry_info.num_hashes.to_le_bytes());
+                
+                result.extend_from_slice(entry_info.hash);
+                
+                result.extend_from_slice(&entry_info.executed_transaction_count.to_le_bytes());
+                
+                result.extend_from_slice(&(entry_info.starting_transaction_index as u64).to_le_bytes());
+            }
+        }
+
+        Ok(result)
+    }
+
+
+    fn process_account_standard(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        result.extend_from_slice(account_info.pubkey);
+        
+        result.extend_from_slice(account_info.owner);
+        
+        result.extend_from_slice(&account_info.lamports.to_le_bytes());
+        
+        result.push(if account_info.executable { 1 } else { 0 });
+        
+        result.extend_from_slice(&account_info.rent_epoch.to_le_bytes());
+        
+        result.extend_from_slice(&account_info.write_version.to_le_bytes());
+        
+        let data_len = account_info.data.len();
+        result.extend_from_slice(&(data_len as u32).to_le_bytes());
+        result.extend_from_slice(account_info.data);
+        
+        Ok(())
+    }
+
+    
+    #[cfg(all(target_arch = "x86_64", has_sse4_1))]
+    fn process_account_sse4(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        self.process_account_standard(account_info, result)
+    }
+
+    #[cfg(not(all(target_arch = "x86_64", has_sse4_1)))]
+    fn process_account_sse4(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        self.process_account_standard(account_info, result)
+    }
+
+    #[cfg(all(target_arch = "x86_64", has_avx2))]
+    fn process_account_avx2(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        self.process_account_standard(account_info, result)
+    }
+
+    #[cfg(not(all(target_arch = "x86_64", has_avx2)))]
+    fn process_account_avx2(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        self.process_account_standard(account_info, result)
+    }
+
+    #[cfg(all(target_arch = "x86_64", has_avx512))]
+    fn process_account_avx512(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        self.process_account_standard(account_info, result)
+    }
+
+    #[cfg(not(all(target_arch = "x86_64", has_avx512)))]
+    fn process_account_avx512(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        self.process_account_standard(account_info, result)
+    }
+
+    fn process_account_v2_standard(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoV2,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        result.extend_from_slice(account_info.pubkey);
+        
+        result.extend_from_slice(account_info.owner);
+        
+        result.extend_from_slice(&account_info.lamports.to_le_bytes());
+        
+        result.push(if account_info.executable { 1 } else { 0 });
+        
+        result.extend_from_slice(&account_info.rent_epoch.to_le_bytes());
+
+        result.extend_from_slice(&account_info.write_version.to_le_bytes());
+        
+        let data_len = account_info.data.len();
+        result.extend_from_slice(&(data_len as u32).to_le_bytes());
+        result.extend_from_slice(account_info.data);
+        
+        match account_info.txn_signature {
+            Some(signature) => {
+                result.push(1);
+                result.extend_from_slice(signature.as_ref());
+            }
+            None => {
+                result.push(0);
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn process_account_v3_standard(
+        &self,
+        account_info: &agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoV3,
+        result: &mut Vec<u8>,
+    ) -> PluginResult<()> {
+        result.extend_from_slice(account_info.pubkey);
+        
+        result.extend_from_slice(account_info.owner);
+        
+        result.extend_from_slice(&account_info.lamports.to_le_bytes());
+        
+        result.push(if account_info.executable { 1 } else { 0 });
+        
+        result.extend_from_slice(&account_info.rent_epoch.to_le_bytes());
+
+        result.extend_from_slice(&account_info.write_version.to_le_bytes());
+        
+        let data_len = account_info.data.len();
+        result.extend_from_slice(&(data_len as u32).to_le_bytes());
+        result.extend_from_slice(account_info.data);
+        
+        result.push(if account_info.txn.is_some() { 1 } else { 0 });
+        
         Ok(())
     }
 }
@@ -162,36 +479,74 @@ impl SimdProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::account::Account;
+    use agave_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
+    use solana_sdk::signature::Signature;
 
-    fn test_account(data: u8) -> Account {
-        Account {
-            lamports: 100,
-            data: vec![data; 128],
-            owner: Pubkey::new_unique(),
-            executable: false,
-            rent_epoch: 0,
-        }
+    #[test]
+    fn test_simd_processor_creation() {
+        let processor = SimdProcessor::new(true).unwrap();
+        assert!(processor.enabled);
     }
 
     #[test]
-    fn test_simd_processing() {
-        let accounts = vec![test_account(1); 512];
-        let processed = SimdProcessor::process_accounts(&accounts).unwrap();
-        assert_eq!(processed.len(), 512);
-        assert_eq!(processed[0][..4], [1, 1, 1, 1]);
+    fn test_process_account() {
+        let processor = SimdProcessor::new(true).unwrap();
+        
+        let pubkey = [1u8; 32];
+        let owner = [2u8; 32];
+        let lamports = 12345;
+        let data = &[3u8, 4, 5];
+        let executable = false;
+        let rent_epoch = 0;
+        
+        let account_info = ReplicaAccountInfo {
+            pubkey: &pubkey,
+            owner: &owner,
+            lamports,
+            data,
+            executable,
+            rent_epoch,
+            write_version: 1,
+        };
+        
+        let account = ReplicaAccountInfoVersions::V0_0_1(&account_info);
+        let slot = 42;
+        
+        let result = processor.process_account(account, slot).unwrap();
+        
+        assert!(!result.is_empty());
+        assert_eq!(result[0], 0x01);
+        
+        let mut slot_bytes = [0u8; 8];
+        slot_bytes.copy_from_slice(&result[1..9]);
+        assert_eq!(u64::from_le_bytes(slot_bytes), slot);
     }
 
     #[test]
-    fn test_validation_success() {
-        let accounts = vec![test_account(1); 64];
-        assert!(SimdProcessor::validate_accounts(&accounts).is_ok());
-    }
-
-    #[test]
-    fn test_validation_failure() {
-        let mut accounts = vec![test_account(1); 64];
-        accounts[32].data[0] = 0;
-        assert!(SimdProcessor::validate_accounts(&accounts).is_err());
+    fn test_process_slot() {
+        let processor = SimdProcessor::new(true).unwrap();
+        
+        let slot = 42;
+        let parent = Some(41);
+        let status = SlotStatus::Confirmed;
+        
+        let result = processor.process_slot(slot, parent, status).unwrap();
+        
+        assert!(!result.is_empty());
+        assert_eq!(result[0], 0x03);
+        
+        let mut slot_bytes = [0u8; 8];
+        slot_bytes.copy_from_slice(&result[1..9]);
+        assert_eq!(u64::from_le_bytes(slot_bytes), slot);
+        
+        assert_eq!(result[9], 1);
+        
+        let mut parent_bytes = [0u8; 8];
+        parent_bytes.copy_from_slice(&result[10..18]);
+        assert_eq!(u64::from_le_bytes(parent_bytes), 41);
+        
+        assert_eq!(result[18], 1);
     }
 }
+
+

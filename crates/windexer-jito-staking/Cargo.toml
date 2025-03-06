@@ -1,35 +1,32 @@
 [package]
 name = "windexer-jito-staking"
-version = { workspace = true }
-edition = { workspace = true }
-authors = { workspace = true }
-license = { workspace = true }
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
 
 [dependencies]
-# Internal crates
+# Internal dependencies
 windexer-common = { path = "../windexer-common" }
 
-# Solana dependencies
-solana-sdk = { workspace = true }
-solana-program = { workspace = true }
+# Agave dependencies
+solana-sdk.workspace = true
+solana-program.workspace = true
 
-# Async runtime and utilities
-tokio = { workspace = true, features = ["full"] }
+# Async
+tokio.workspace = true
 async-trait = "0.1"
 futures = "0.3"
 
-# Error handling and logging
-anyhow = { workspace = true }
+# Utilities
+anyhow.workspace = true
 thiserror = "2.0"
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-# Serialization
 serde = { workspace = true, features = ["derive"] }
-serde_json = "1.0"
-
-# Time handling
 chrono = "0.4"
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [lib]
 name = "windexer_jito_staking"

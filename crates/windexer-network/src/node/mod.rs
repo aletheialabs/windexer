@@ -27,7 +27,7 @@ use {
     },
     solana_sdk::{
         pubkey::Pubkey,
-        signer::keypair::Keypair as SolanaKeypair,
+        signer::keypair::Keypair as agaveKeypair,
     },
     std::{
         collections::HashSet,
@@ -45,7 +45,7 @@ use {
 
 use std::convert::TryInto;
 
-pub fn convert_keypair(solana_keypair: &SolanaKeypair) -> identity::Keypair {
+pub fn convert_keypair(solana_keypair: &agaveKeypair) -> identity::Keypair {
     let full_bytes = solana_keypair.to_bytes();
     let seed: [u8; 32] = full_bytes[..32]
         .try_into()

@@ -6,16 +6,15 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-# Internal crates
 windexer-common = { path = "../windexer-common" }
 windexer-store = { path = "../windexer-store" }
 
 # API dependencies
-tonic = "0.10"
-prost = "0.12"
-tower = "0.4"
-axum = "0.7"
-tokio-tungstenite = "0.20"
+tonic = "0.12.3"
+prost = "0.13.5"
+tower = "0.5.2"
+axum = "0.8.1"
+tokio-tungstenite = "0.26.2"
 
 # Workspace dependencies
 tokio.workspace = true

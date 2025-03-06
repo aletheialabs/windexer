@@ -20,7 +20,7 @@ This is a decentralized Solana indexer application built in Rust using libp2p fo
 # Libraries and Dependencies
 Key dependencies:
 - libp2p for peer-to-peer networking and gossipsub
-- solana-geyser-plugin-interface for blockchain data ingestion
+- agave-geyser-plugin-interface for blockchain data ingestion
 - jito-restaking-sdk for validator staking and NCNs
 - tokio for async runtime
 - sqlx for database operations

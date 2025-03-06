@@ -1,27 +1,15 @@
-// crates/windexer-geyser/src/lib.rs
-#![allow(clippy::unsafe_derive_deserialize)]
+//! wIndexer Geyser Plugin for agave
+//!
+//! A high-performance agave Geyser plugin that streams data to the wIndexer 
+//! decentralized network using advanced techniques like memory mapping, SIMD processing,
+//! and p2p propagation.
 
-use {
-    memory_mapped::ValidatorMemoryMap,
-    p2p_propagator::TidePropagator,
-    simd_processing::SimdProcessor,
-    solana_geyser_plugin_interface::{
-        geyser_plugin_interface::{GeyserPlugin, ReplicaAccountInfo, Result as GeyserResult},
-        ReplicaAccountInfoVersions,
-    },
-    std::{
-        ffi::CStr,
-        os::raw::c_char,
-        path::Path,
-        sync::{Arc, Mutex},
-        time::{SystemTime, UNIX_EPOCH},
-    },
-    validator_integration::{TideHook, ValidatorIntegrationError},
-    windexer_common::{
-        config::{Config, TideConfig},
-        crypto::{BLSKeypair, Ed25519Keypair},
-        types::{TideBatch, TideHeader},
-    },
+use std::sync::{Arc, RwLock};
+use std::fmt::Debug;
+
+use agave_geyser_plugin_interface::geyser_plugin_interface::{
+    GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
+    ReplicaTransactionInfoVersions, ReplicaEntryInfoVersions, Result as PluginResult, SlotStatus,
 };
 
 mod memory_mapped;
@@ -29,125 +17,311 @@ mod p2p_propagator;
 mod simd_processing;
 mod validator_integration;
 
-/// Main Tide Geyser Plugin implementation
-pub struct TideGeyser {
-    config: TideConfig,
-    memory_map: Option<Arc<Mutex<ValidatorMemoryMap>>>,
-    tide_hook: Option<TideHook>,
-    propagator: TidePropagator,
-    bls_keypair: BLSKeypair,
-    ed25519_keypair: Ed25519Keypair,
-    running: bool,
+use memory_mapped::MemoryMappedAccounts;
+use p2p_propagator::P2PPropagator;
+use simd_processing::SimdProcessor;
+use validator_integration::ValidatorIntegration;
+
+include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
+
+#[derive(Debug, Default)]
+pub struct PluginConfig {
+    pub mmap_path: Option<String>,
+    pub mmap_size: usize,
+    pub bootstrap_nodes: Vec<String>,
+    pub enable_simd: bool,
+    pub enable_validator_integration: bool,
+    pub validator_rpc_url: Option<String>,
+    pub p2p_topics: Vec<String>,
+    pub data_dir: Option<String>,
 }
 
-impl GeyserPlugin for TideGeyser {
+impl PluginConfig {
+    pub fn from_json(config: &serde_json::Value) -> Result<Self, GeyserPluginError> {
+        let mmap_path = config.get("mmap_path")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        
+        let mmap_size = config.get("mmap_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1024 * 1024 * 1024) as usize;
+        
+        let bootstrap_nodes = config.get("bootstrap_nodes")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        
+        let enable_simd = config.get("enable_simd")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        
+        let enable_validator_integration = config.get("enable_validator_integration")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        
+        let validator_rpc_url = config.get("validator_rpc_url")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+            
+        let p2p_topics = config.get("p2p_topics")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![
+                "accounts".to_string(),
+                "transactions".to_string(),
+                "blocks".to_string(),
+                "slots".to_string(),
+            ]);
+            
+        let data_dir = config.get("data_dir")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        
+        Ok(Self {
+            mmap_path,
+            mmap_size,
+            bootstrap_nodes,
+            enable_simd,
+            enable_validator_integration,
+            validator_rpc_url,
+            p2p_topics,
+            data_dir,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct WindexerGeyserPlugin {
+    config: Arc<RwLock<PluginConfig>>,
+    memory_mapped: Option<Arc<MemoryMappedAccounts>>,
+    propagator: Option<Arc<P2PPropagator>>,
+    simd_processor: Option<Arc<SimdProcessor>>,
+    validator_integration: Option<Arc<ValidatorIntegration>>,
+}
+
+impl WindexerGeyserPlugin {
+    pub fn new() -> Self {
+        Self {
+            config: Arc::new(RwLock::new(PluginConfig::default())),
+            memory_mapped: None,
+            propagator: None,
+            simd_processor: None,
+            validator_integration: None,
+        }
+    }
+}
+
+impl GeyserPlugin for WindexerGeyserPlugin {
     fn name(&self) -> &'static str {
-        "Windexer Tide Geyser Plugin"
+        "windexer-geyser"
     }
 
-    fn on_load(
-        &mut self,
-        config_file: &str,
-    ) -> GeyserResult<()> {
-        let config = Config::load(Path::new(config_file))?;
-        self.config = config.tide.clone().ok_or_else(|| {
-            solana_geyser_plugin_interface::GeyserPluginError::ConfigParsingError {
-                msg: "Missing Tide config section".to_string(),
-            }
-        })?;
+    fn on_load(&mut self, config_file: &str, _is_reload: bool) -> PluginResult<()> {
+        tracing::info!("Loading wIndexer Geyser plugin (build: {})", BUILD_DATE);
+        
+        let config_content = std::fs::read_to_string(config_file)
+            .map_err(|e| GeyserPluginError::ConfigFileReadError {
+                msg: format!("Failed to read config file {}: {}", config_file, e),
+            })?;
 
-        // Initialize cryptography
-        self.bls_keypair = BLSKeypair::from_file(&self.config.bls_key_path)?;
-        self.ed25519_keypair = Ed25519Keypair::from_file(&self.config.ed25519_key_path)?;
+        let config_json: serde_json::Value = serde_json::from_str(&config_content)
+            .map_err(|e| GeyserPluginError::ConfigFileReadError {
+                msg: format!("Failed to parse config file as JSON: {}", e),
+            })?;
 
-        // Try to establish direct memory mapping
-        if let Ok(mmap) = unsafe {
-            ValidatorMemoryMap::new(
-                self.config.validator_pid,
-                self.config.accounts_start_address,
-                self.config.accounts_region_size,
-            )
-        } {
-            self.memory_map = Some(Arc::new(Mutex::new(mmap)));
-            log::info!("Direct memory mapping established");
-        } else {
-            log::warn!("Falling back to standard Geyser plugin mode");
+        let plugin_config = PluginConfig::from_json(&config_json)?;
+        *self.config.write().unwrap() = plugin_config;
+
+        let config = self.config.read().unwrap().clone();
+        
+        if let Some(mmap_path) = &config.mmap_path {
+            tracing::info!("Initializing memory mapping from {}", mmap_path);
+            self.memory_mapped = Some(Arc::new(MemoryMappedAccounts::new(
+                mmap_path,
+                config.mmap_size,
+            )?));
         }
-
-        // Initialize P2P propagator
-        self.propagator = TidePropagator::new(
-            self.config.gossip.clone(),
-            self.config.network_metrics.clone(),
-            self.config.chain_id,
-        )?;
-
-        Ok(())
-    }
-
-    fn update_account(
-        &mut self,
-        account: ReplicaAccountInfoVersions<'_>,
-        slot: u64,
-        is_startup: bool,
-    ) -> GeyserResult<()> {
-        let account_info = match account {
-            ReplicaAccountInfoVersions::V0_0_1(acc) => acc,
-        };
-
-        // Process via direct memory mapping if available
-        if let Some(mmap) = &self.memory_map {
-            let mmap_lock = mmap.lock().unwrap();
-            let account_data = unsafe { mmap_lock.get_account(account_info.pubkey as usize) }?;
-            
-            // SIMD process batch
-            let processed = SimdProcessor::process_accounts(&[account_data.clone()])?;
-            
-            // Create Tide batch
-            let batch = TideBatch {
-                header: TideHeader {
-                    slot,
-                    parent_slot: slot.saturating_sub(1),
-                    timestamp: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_nanos() as u64,
-                    chain_id: self.config.chain_id,
-                },
-                data: processed,
-            };
-
-            // Propagate through P2P network
-            self.propagator.propagate(batch)?;
-        } else {
-            // Fallback to traditional Geyser processing
-            let account = convert_account_info(account_info)?;
-            let processed = SimdProcessor::process_accounts(&[account])?;
-            
-            let batch = TideBatch {
-                header: TideHeader {
-                    slot,
-                    parent_slot: slot.saturating_sub(1),
-                    timestamp: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_nanos() as u64,
-                    chain_id: self.config.chain_id,
-                },
-                data: processed,
-            };
-
-            self.propagator.propagate(batch)?;
+        
+        if config.enable_simd {
+            tracing::info!("Initializing SIMD processor");
+            self.simd_processor = Some(Arc::new(SimdProcessor::new(config.enable_simd)?));
         }
+        
+        if config.enable_validator_integration {
+            tracing::info!("Initializing validator integration");
+            self.validator_integration = Some(Arc::new(ValidatorIntegration::new(
+                config.validator_rpc_url.as_deref(),
+            )?));
+        }
+        
+        tracing::info!("Initializing p2p propagator");
+        self.propagator = Some(Arc::new(P2PPropagator::new(
+            &config.bootstrap_nodes,
+            &config.p2p_topics,
+            config.data_dir.as_deref(),
+        )?));
 
+        tracing::info!("wIndexer Geyser plugin loaded successfully");
         Ok(())
     }
 
     fn on_unload(&mut self) {
-        if let Some(hook) = self.tide_hook.take() {
-            hook.shutdown();
+        tracing::info!("Unloading wIndexer Geyser plugin");
+        
+        self.propagator = None;
+        self.validator_integration = None;
+        self.simd_processor = None;
+        self.memory_mapped = None;
+        
+        tracing::info!("wIndexer Geyser plugin unloaded");
+    }
+
+    fn update_account(
+        &self,
+        account: ReplicaAccountInfoVersions,
+        slot: u64,
+        is_startup: bool,
+    ) -> PluginResult<()> {
+        if is_startup && self.memory_mapped.is_some() {
+            if let Some(mmap) = &self.memory_mapped {
+                mmap.store_account(&account, slot)?;
+            }
+            return Ok(());
         }
-        self.running = false;
-        log::info!("Tide Geyser plugin unloaded");
+
+        let processed_data = if let Some(processor) = &self.simd_processor {
+            processor.process_account(account.clone(), slot)?
+        } else {
+            bincode::serialize(&(slot, account)).map_err(|e| GeyserPluginError::AccountsUpdateError {
+                msg: format!("Failed to serialize account: {}", e),
+            })?
+        };
+        
+        if let Some(propagator) = &self.propagator {
+            propagator.propagate_account(processed_data, slot)?;
+        }
+        
+        if let Some(mmap) = &self.memory_mapped {
+            mmap.store_account(&account, slot)?;
+        }
+        
+        Ok(())
+    }
+
+    fn notify_end_of_startup(&self) -> PluginResult<()> {
+        tracing::info!("End of startup notification received");
+        
+        if let Some(mmap) = &self.memory_mapped {
+            mmap.flush()?;
+        }
+        
+        Ok(())
+    }
+
+    fn update_slot_status(
+        &self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> PluginResult<()> {
+        if let Some(processor) = &self.simd_processor {
+            let processed_data = processor.process_slot(slot, parent, status)?;
+            
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_slot(processed_data, slot)?;
+            }
+        } else {
+            let slot_data = (slot, parent, status);
+            let processed_data = bincode::serialize(&slot_data)
+                .map_err(|e| GeyserPluginError::SlotStatusUpdateError {
+                    msg: format!("Failed to serialize slot status: {}", e),
+                })?;
+                
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_slot(processed_data, slot)?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn notify_transaction(
+        &self,
+        transaction: ReplicaTransactionInfoVersions,
+        slot: u64,
+    ) -> PluginResult<()> {
+        if let Some(processor) = &self.simd_processor {
+            let processed_data = processor.process_transaction(transaction.clone(), slot)?;
+            
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_transaction(processed_data, slot)?;
+            }
+        } else {
+            let tx_data = (slot, transaction);
+            let processed_data = bincode::serialize(&tx_data)
+                .map_err(|e| GeyserPluginError::TransactionUpdateError {
+                    msg: format!("Failed to serialize transaction: {}", e),
+                })?;
+                
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_transaction(processed_data, slot)?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn notify_block_metadata(
+        &self,
+        blockinfo: ReplicaBlockInfoVersions,
+    ) -> PluginResult<()> {
+        if let Some(processor) = &self.simd_processor {
+            let processed_data = processor.process_block(blockinfo.clone())?;
+            
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_block(processed_data)?;
+            }
+        } else {
+            let processed_data = bincode::serialize(&blockinfo)
+                .map_err(|e| GeyserPluginError::AccountsUpdateError {
+                    msg: format!("Failed to serialize block metadata: {}", e),
+                })?;
+                
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_block(processed_data)?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn notify_entry(&self, entry: ReplicaEntryInfoVersions) -> PluginResult<()> {
+        if let Some(processor) = &self.simd_processor {
+            let processed_data = processor.process_entry(entry.clone())?;
+            
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_entry(processed_data)?;
+            }
+        } else {
+            let processed_data = bincode::serialize(&entry)
+                .map_err(|e| GeyserPluginError::AccountsUpdateError {
+                    msg: format!("Failed to serialize entry: {}", e),
+                })?;
+                
+            if let Some(propagator) = &self.propagator {
+                propagator.propagate_entry(processed_data)?;
+            }
+        }
+        
+        Ok(())
     }
 
     fn account_data_notifications_enabled(&self) -> bool {
@@ -155,113 +329,57 @@ impl GeyserPlugin for TideGeyser {
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
-        self.config.enable_transaction_notifications
+        true
+    }
+
+    fn entry_notifications_enabled(&self) -> bool {
+        true
     }
 }
 
-impl TideGeyser {
-    /// Initialize the Tide Geyser plugin with validator integration
-    pub fn new() -> Self {
-        Self {
-            config: TideConfig::default(),
-            memory_map: None,
-            tide_hook: None,
-            propagator: TidePropagator::default(),
-            bls_keypair: BLSKeypair::default(),
-            ed25519_keypair: Ed25519Keypair::default(),
-            running: false,
-        }
-    }
-
-    /// Start validator pipeline taps
-    pub fn start_taps(
-        &mut self,
-        bank_forks: solana_runtime::bank_forks::BankForks,
-        block_commitment_cache: solana_runtime::block_commitment_cache::BlockCommitmentCache,
-    ) -> Result<(), ValidatorIntegrationError> {
-        let hook = TideHook::new(
-            vec![
-                solana_runtime::pipeline::PipelineStage::TPUReceive,
-                solana_runtime::pipeline::PipelineStage::TVUVote,
-            ],
-            Arc::new(bank_forks),
-            Arc::new(block_commitment_cache),
-        );
-        
-        hook.install_all()?;
-        self.tide_hook = Some(hook);
-        self.running = true;
-        Ok(())
-    }
-
-    /// Get current propagation metrics
-    pub fn metrics(&self) -> std::collections::BTreeMap<String, u64> {
-        self.propagator.metrics()
-    }
-}
-
-/// Convert raw account info to Solana SDK Account
-fn convert_account_info(
-    info: &ReplicaAccountInfo,
-) -> Result<solana_sdk::account::Account, Box<dyn std::error::Error>> {
-    Ok(solana_sdk::account::Account {
-        lamports: info.lamports,
-        data: info.data[0..info.data_len as usize].to_vec(),
-        owner: Pubkey::try_from(info.owner).unwrap(),
-        executable: info.executable,
-        rent_epoch: info.rent_epoch,
-    })
-}
-
-/// Required C interface for Geyser plugins
 #[no_mangle]
-#[allow(clippy::missing_safety_doc)]
+#[allow(improper_ctypes_definitions)]
 pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
-    let plugin = TideGeyser::new();
+    let plugin = WindexerGeyserPlugin::new();
     let boxed = Box::new(plugin);
     Box::into_raw(boxed)
-}
-
-/// Default implementations for FFI
-impl Default for TideGeyser {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 
-    fn test_account_info() -> ReplicaAccountInfoVersions<'_> {
-        let mut info = ReplicaAccountInfo {
-            pubkey: [1; 32],
-            lamports: 100,
-            owner: [2; 32],
-            executable: false,
-            rent_epoch: 0,
-            data: vec![0; 128].as_mut_ptr(),
-            data_len: 128,
-            write_version: 0,
-        };
-        ReplicaAccountInfoVersions::V0_0_1(&mut info)
+    #[test]
+    fn test_plugin_name() {
+        let plugin = WindexerGeyserPlugin::new();
+        assert_eq!(plugin.name(), "windexer-geyser");
     }
 
     #[test]
-    fn test_plugin_creation() {
-        let mut plugin = TideGeyser::new();
-        let config_path = format!("{}/test_config.toml", env!("CARGO_MANIFEST_DIR"));
+    fn test_plugin_config_from_json() {
+        let config_json = serde_json::json!({
+            "mmap_path": "/tmp/windexer-accounts.mmap",
+            "mmap_size": 2147483648,
+            "bootstrap_nodes": [
+                "/ip4/127.0.0.1/tcp/8900/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N",
+                "/ip4/127.0.0.1/tcp/8901/p2p/QmaBvfZooxWkrv7D3r8LS9moNjzD2o525XMH93Hzg5GRAu"
+            ],
+            "enable_simd": true,
+            "enable_validator_integration": false,
+            "validator_rpc_url": "http://localhost:8899",
+            "p2p_topics": ["accounts", "transactions", "blocks"],
+            "data_dir": "/var/lib/windexer"
+        });
+
+        let config = PluginConfig::from_json(&config_json).unwrap();
         
-        assert!(plugin.on_load(&config_path).is_ok());
-        assert!(plugin.update_account(test_account_info(), 1, false).is_ok());
-        plugin.on_unload();
-    }
-
-    #[test]
-    fn test_metrics_collection() {
-        let plugin = TideGeyser::new();
-        let metrics = plugin.metrics();
-        assert!(metrics.contains_key("high_priority"));
+        assert_eq!(config.mmap_path, Some("/tmp/windexer-accounts.mmap".to_string()));
+        assert_eq!(config.mmap_size, 2147483648);
+        assert_eq!(config.bootstrap_nodes.len(), 2);
+        assert_eq!(config.enable_simd, true);
+        assert_eq!(config.enable_validator_integration, false);
+        assert_eq!(config.validator_rpc_url, Some("http://localhost:8899".to_string()));
+        assert_eq!(config.p2p_topics.len(), 3);
+        assert_eq!(config.data_dir, Some("/var/lib/windexer".to_string()));
     }
 }

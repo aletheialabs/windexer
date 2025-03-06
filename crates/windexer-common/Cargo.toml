@@ -1,35 +1,35 @@
 [package]
 name = "windexer-common"
-version = { workspace = true }
-edition = { workspace = true }
-authors = { workspace = true }
-license = { workspace = true }
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
 
 [dependencies]
-# Solana dependencies
-solana-sdk = { workspace = true }
-solana-program = { workspace = true }
+# Add Solana dependencies
+solana-program = "2.2.0"
+solana-sdk = "2.2.0"
 
 # Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde.workspace = true
+serde_json.workspace = true
 
 # Error handling
-thiserror = { workspace = true }
-anyhow = { workspace = true }
+thiserror.workspace = true
+anyhow.workspace = true
 
 # Async utilities
-tokio = { workspace = true }
-futures = { workspace = true }
-async-trait = { workspace = true }
+tokio.workspace = true
+futures.workspace = true
+async-trait.workspace = true
 
 # Logging
-tracing = { workspace = true }
+tracing.workspace = true
 
-# Time handling and cryptography
-chrono = { workspace = true, features = ["serde"] }
-sha2 = { workspace = true }
+# Cryptography
+chrono.workspace = true
+sha2.workspace = true
 
 # Utilities
-bytes = { workspace = true }
+bytes.workspace = true
 bs58 = "0.5"

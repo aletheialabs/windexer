@@ -2,6 +2,8 @@ use sha2::{Digest, Sha256};
 use solana_sdk::{
     signature::{Keypair, Signature},
     signer::Signer,
+    pubkey::{Pubkey, ParsePubkeyError},
+    signature::{ParseSignatureError},
 };
 
 /// Hash a message using SHA-256
