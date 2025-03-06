@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/windexer-api",
     "crates/windexer-common",
-    "crates/windexer-geyser",
+    "crates/windexer-geyser", 
     "crates/windexer-jito-staking",
     "crates/windexer-network",
     "crates/windexer-store",
