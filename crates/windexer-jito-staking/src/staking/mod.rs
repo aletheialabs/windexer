@@ -1,29 +1,32 @@
 // crates/windexer-jito-staking/src/staking/mod.rs
 
-use solana_sdk::pubkey::Pubkey;
-use anyhow::Result;
-use tokio::sync::RwLock;
+//! Staking management module
+
+pub mod types;
+
+use {
+    std::{collections::HashMap, sync::RwLock},
+    solana_sdk::pubkey::Pubkey,
+    anyhow::Result,
+    crate::staking::types::{StakingConfig, OperatorStats},
+};
 
 mod delegation;
-pub mod types;
 mod vault;
 
-pub use types::{StakingConfig, OperatorStats};
 pub use delegation::DelegationManager;
 pub use vault::VaultManager;
 
 pub struct StakingManager {
     config: StakingConfig,
-    delegation_manager: RwLock<DelegationManager>,
-    vault_manager: RwLock<VaultManager>,
+    operators: RwLock<HashMap<Pubkey, OperatorStats>>,
 }
 
 impl StakingManager {
     pub fn new(config: StakingConfig) -> Self {
         Self {
             config,
-            delegation_manager: RwLock::new(DelegationManager::new()),
-            vault_manager: RwLock::new(VaultManager::new()),
+            operators: RwLock::new(HashMap::new()),
         }
     }
 
@@ -42,52 +45,20 @@ impl StakingManager {
         }
 
         let stats = self.get_operator_stats(&operator).await?;
-        if stats.total_stake + amount > self.config.max_operator_stake {
+        if stats.total_stake + amount > 1_000_000_000_000 {
             return Err(anyhow::anyhow!("Operator would exceed maximum stake"));
         }
 
-        let mut delegation_manager = self.delegation_manager.write().await;
-        delegation_manager.add_delegation(operator, staker, amount).await?;
+        let mut operators = self.operators.write().unwrap();
+        let stats = operators.entry(operator).or_default();
+        stats.total_stake += amount;
 
         Ok(())
     }
 
     pub async fn get_operator_stats(&self, operator: &Pubkey) -> Result<OperatorStats> {
-        let delegation_manager = self.delegation_manager.read().await;
-        let delegations = delegation_manager.get_operator_delegations(operator);
-        let total_stake: u64 = delegations.iter().map(|(_, amount)| amount).sum();
-        
-        Ok(OperatorStats {
-            total_stake,
-            active_delegations: delegations.len() as u32,
-            commission_earned: 0,
-            uptime: 1.0,
-            last_active: chrono::Utc::now().timestamp(),
-        })
-    }
-
-    pub async fn create_vault(
-        &self,
-        admin: Pubkey,
-        mint: Pubkey,
-        ncn: Pubkey
-    ) -> Result<Pubkey> {
-        let mut vault_manager = self.vault_manager.write().await;
-        vault_manager.create_vault(admin, mint, ncn).await
-    }
-
-    pub async fn add_delegation_to_vault(
-        &self,
-        vault: Pubkey,
-        operator: Pubkey,
-        amount: u64
-    ) -> Result<()> {
-        let stats = self.get_operator_stats(&operator).await?;
-        if stats.total_stake < amount {
-            return Err(anyhow::anyhow!("Insufficient stake for vault delegation"));
-        }
-
-        let vault_manager = self.vault_manager.read().await;
-        vault_manager.add_delegation(vault, operator, amount).await
+        let operators = self.operators.read().unwrap();
+        let stats = operators.get(operator).cloned().unwrap_or_default();
+        Ok(stats)
     }
 }
