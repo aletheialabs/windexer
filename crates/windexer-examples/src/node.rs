@@ -27,23 +27,18 @@ use {
     long_about = "Runs a wIndexer node that connects to the Jito network for block data and tip routing"
 )]
 struct Args {
-    /// Node index (0, 1, 2)
     #[clap(short, long)]
     index: u16,
     
-    /// Base port number
     #[clap(short, long, default_value = "9000")]
     base_port: u16,
     
-    /// Enable Jito tip routing
     #[clap(long)]
     enable_tip_route: bool,
 
-    /// Bootstrap peers to connect to
     #[clap(long, value_delimiter = ',')]
     bootstrap_peers: Vec<String>,
 
-    /// Solana RPC URL
     #[clap(long, default_value = "http://localhost:8899")]
     solana_rpc: String,
 }
@@ -52,7 +47,6 @@ struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
     
-    // Configure logging with better defaults
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| {
             EnvFilter::new(format!(
@@ -88,26 +82,22 @@ async fn main() -> Result<()> {
         keypair: SerializableKeypair::new(&Keypair::new()),
         geyser_plugin_config: None,
         metrics_addr: Some(format!("127.0.0.1:{}", metrics_port).parse()?),
-        };
+    };
 
     let staking_config = StakingConfig {
-        min_stake: 100_000, // 100k minimum stake
-        commission_bps: if args.index == 0 { 0 } else { 500 }, // Bootstrap node has 0% fee
-        min_delegation_period: Duration::from_secs(300), // 5 min for demo
-        max_operator_stake: 1_000_000_000,
+        min_stake: 100_000,
         min_operators: 3,
         consensus_threshold: 0.67,
         reward_rate: 0.15,
-        distribution_interval: Duration::from_secs(60), // Every minute for demo
-        slash_threshold: 0.90, // 10% downtime allowed
+        distribution_interval: Duration::from_secs(60),
+        slash_threshold: 0.90,
         min_uptime: 0.95,
     };
 
     info!("🚀 Starting Jito-integrated node {} on port {}", args.index, port);
     
-    let (mut node, shutdown_tx) = Node::new(config, staking_config).await?;
+    let (mut node, shutdown_tx) = Node::create_simple(config).await?;
     
-    // Set up graceful shutdown
     let shutdown_complete = Arc::new(AtomicBool::new(false));
     let shutdown_complete_clone = shutdown_complete.clone();
 
@@ -121,7 +111,6 @@ async fn main() -> Result<()> {
         }
     })?;
 
-    // Start the node
     node.start().await?;
     
     info!("✅ Node shutdown complete");
