@@ -1,7 +1,6 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use chrono::NaiveDateTime;
 
-/// Get current Unix timestamp in seconds
 pub fn current_timestamp() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -9,22 +8,24 @@ pub fn current_timestamp() -> i64 {
         .as_secs() as i64
 }
 
-/// Get duration since a given Unix timestamp in seconds
 pub fn duration_since(timestamp: i64) -> Duration {
     let now = current_timestamp();
     Duration::from_secs((now - timestamp).max(0) as u64)
 }
 
-/// Convert a timestamp to human readable format
 pub fn format_timestamp(timestamp: i64) -> String {
-    let datetime = NaiveDateTime::from_timestamp_opt(timestamp, 0)
+    let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
         .unwrap_or_default();
     datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 
-/// Check if a timestamp is within a given duration from now
 pub fn is_recent(timestamp: i64, max_age: Duration) -> bool {
     duration_since(timestamp) <= max_age
+}
+
+pub fn unix_timestamp_to_datetime(timestamp: i64) -> Option<NaiveDateTime> {
+    chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
+        .map(|dt| dt.naive_utc())
 }
 
 #[cfg(test)]

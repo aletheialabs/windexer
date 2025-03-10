@@ -2,12 +2,16 @@
 
 mod crypto;
 mod time;
+pub mod slot_status;
+pub mod transaction_status;
 
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 pub use crypto::{hash_message, verify_signature};
 pub use time::{current_timestamp, duration_since};
+pub use slot_status::SerializableSlotStatus;
+pub use transaction_status::SerializableTransactionMeta;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerState {
