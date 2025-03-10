@@ -1,0 +1,40 @@
+{
+    "libpath": "libwindexer_geyser.so",
+    "network": {
+      "listen_addr": "/ip4/0.0.0.0/tcp/8765",
+      "bootstrap_peers": [
+        "/ip4/1.2.3.4/tcp/8765/p2p/12D3KooWHFrmLWTTDD4NodngtR41NZigW1GXNZEhxrrEbXCBZEHQ",
+        "/ip4/5.6.7.8/tcp/8765/p2p/12D3KooWS13jnWDQbRRjY1Qg32vTvfwDMXz1dt1NgQyngCcYHYdX"
+      ],
+      "topics": [
+        "windexer/accounts/v1",
+        "windexer/transactions/v1",
+        "windexer/blocks/v1",
+        "windexer/entries/v1"
+      ],
+      "peer_capacity": 50,
+      "connection_timeout_ms": 10000,
+      "heartbeat_interval_ms": 30000,
+      "discovery_interval_ms": 60000
+    },
+    "accounts_selector": {
+      "accounts": ["*"],
+      "owners": [
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+      ]
+    },
+    "transaction_selector": {
+      "mentions": ["*"],
+      "include_votes": false
+    },
+    "thread_count": 8,
+    "batch_size": 1000,
+    "panic_on_error": false,
+    "use_mmap": true,
+    "node_pubkey": "HxzYVzSVdcVZKKRKaC1SPzpttAQi5jtpgVA89wTY3pAT",
+    "metrics": {
+      "enabled": true,
+      "interval_seconds": 60
+    }
+  }
