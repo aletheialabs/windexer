@@ -1,20 +1,24 @@
 // crates/windexer-network/src/consensus/protocol.rs
 
 use {
-    std::sync::Arc,
+    std::{sync::Arc, time::Duration},
     tokio::sync::{mpsc, RwLock},
     anyhow::{Result, anyhow},
-    windexer_common::Block,
+    tracing::{debug, error, info, warn},
+    windexer_common::types::block::BlockData,
     solana_sdk::pubkey::Pubkey,
     windexer_jito_staking::{
         StakingManager,
-        staking::OperatorStats,
+        OperatorStats,
     },
     crate::consensus::{
         state::ConsensusState,
         validator::ValidatorSet,
         config::ConsensusConfig,
     },
+    crate::gossip::{GossipMessage, MessageType},
+    hex,
+    windexer_common::utils::slot_status::SlotStatus,
 };
 
 pub struct ConsensusProtocol {
@@ -24,10 +28,15 @@ pub struct ConsensusProtocol {
     staking_manager: Arc<StakingManager>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConsensusMessage {
-    NewBlock(Block),
-    Commit(BlockHash),
+    BlockProposal(BlockData),
+    BlockVote {
+        slot: u64,
+        proposer: String,
+        is_valid: bool,
+    },
+    BlockConfirmation(BlockData),
 }
 
 pub type BlockHash = [u8; 32];
@@ -49,7 +58,7 @@ impl ConsensusProtocol {
     }
 
     // Modify handle_block to check stake
-    async fn handle_block(&mut self, block: Block) -> Result<()> {
+    async fn handle_block(&mut self, block: BlockData) -> Result<()> {
         let mut state = self.state.write().await;
         
         if block.block_height != Some(state.height + 1) {
@@ -72,7 +81,7 @@ impl ConsensusProtocol {
         state.current_block = Some(block.clone());
         state.height += 1;
         
-        self.message_tx.send(ConsensusMessage::NewBlock(block)).await?;
+        self.message_tx.send(ConsensusMessage::BlockProposal(block)).await?;
 
         Ok(())
     }
@@ -90,7 +99,19 @@ impl ConsensusProtocol {
 
         if vote_stake * 3 > total_stake * 2 {
             self.message_tx
-                .send(ConsensusMessage::Commit(*block_hash))
+                .send(ConsensusMessage::BlockConfirmation(BlockData {
+                    blockhash: Some(hex::encode(block_hash)),
+                    slot: 0,
+                    block_height: None,
+                    parent_slot: None,
+                    parent_blockhash: None,
+                    transaction_count: None,
+                    timestamp: None,
+                    rewards: None,
+                    entries: Vec::new(),
+                    entry_count: 0,
+                    status: SlotStatus::Processed,
+                }))
                 .await?;
         }
 

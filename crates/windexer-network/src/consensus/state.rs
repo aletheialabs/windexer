@@ -2,15 +2,17 @@
 
 use {
     solana_sdk::vote::state::Vote,
-    windexer_common::Block,
+    windexer_common::types::block::BlockData,
     super::protocol::BlockHash,
     solana_sdk::pubkey::Pubkey,
     std::collections::HashMap,
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub struct ConsensusState {
     pub height: u64,
-    pub current_block: Option<Block>,
+    pub current_block: Option<BlockData>,
     pub votes: HashMap<BlockHash, HashMap<Pubkey, Vote>>,
 }
 

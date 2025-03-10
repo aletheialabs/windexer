@@ -17,15 +17,19 @@ futures = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-bincode = "1.3"
+bincode = "1.3.3"
 
 # Utilities
 anyhow = "1.0"
 thiserror = "2.0.11"
 tracing = "0.1"
+tracing-subscriber.workspace = true
 
 # Solana SDK
 solana-sdk.workspace = true
+
+# Add this in the dependencies section
+hex = "0.4.3"
 
 [dev-dependencies]
 tokio-test = "0.4"

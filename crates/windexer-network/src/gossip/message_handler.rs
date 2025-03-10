@@ -14,7 +14,7 @@ use {
     anyhow::Result,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageCacheEntry {
     pub message_id: Vec<u8>,
     pub topics: Vec<String>,
@@ -99,7 +99,7 @@ impl MessageHandler {
     }
 
     fn get_cache_entries(&self) -> Vec<MessageCacheEntry> {
-        self.message_cache.iter().collect()
+        self.message_cache.iter().cloned().collect()
     }
 
 
