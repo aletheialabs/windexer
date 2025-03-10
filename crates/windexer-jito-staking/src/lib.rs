@@ -9,11 +9,13 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use anyhow::Result;
 use tracing::{info, error};
+use tokio::sync::RwLock;
 
 pub mod staking;
 pub mod rewards;
 pub mod slashing;
 pub mod consensus;
+pub mod utils;
 
 pub use staking::types::{StakingConfig, OperatorStats};
 pub use staking::StakingManager;
