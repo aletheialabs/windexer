@@ -3,7 +3,6 @@ use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {
-    /// Network-specific configuration
     pub listen_addresses: Vec<String>,
     pub bootstrap_peers: Vec<String>,
     pub heartbeat_interval: u64,

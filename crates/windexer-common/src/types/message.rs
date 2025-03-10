@@ -1,26 +1,45 @@
-use serde::{Deserialize, Serialize};
+//! Network message types
+//!
+//! This module defines common data structures for network messages
+//! across the wIndexer system.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub id: String,
-    pub topic: Topic,
-    pub payload: Vec<u8>,
-    pub message_type: MessageType,
-}
+use {
+    serde::{Deserialize, Serialize},
+    serde_json::Value,
+};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MessageType {
     AccountUpdate,
-    BlockUpdate,
     TransactionUpdate,
+    BlockUpdate,
+    EntryUpdate,
+    SlotStatusUpdate,
+    Control,
+    Gossip,
     Heartbeat,
-    PeerAnnouncement,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Topic {
-    Accounts,
-    Blocks,
-    Transactions,
-    Network,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkMessage {
+    pub message_type: MessageType,
+    pub timestamp: i64,
+    pub data: Value,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ControlMessageType {
+    JoinRequest,
+    JoinResponse,
+    LeaveRequest,
+    PeerListRequest,
+    PeerListResponse,
+    StatusRequest,
+    StatusResponse,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ControlMessage {
+    pub control_type: ControlMessageType,
+    pub data: Value,
 }

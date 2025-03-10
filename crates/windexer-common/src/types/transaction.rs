@@ -1,54 +1,44 @@
-use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    instruction::CompiledInstruction,
-    message::Message,
-    pubkey::Pubkey,
-    signature::Signature,
+//! Transaction data types
+//!
+//! This module defines common data structures for working with transaction data
+//! across the wIndexer system.
+
+use {
+    solana_sdk::{
+        signature::Signature,
+        clock::Slot,
+        message::Message,
+    },
+    solana_transaction_status::TransactionStatusMeta,
+    serde::{Deserialize, Serialize},
+    std::fmt::{Debug, Formatter, Result as FmtResult},
+    crate::utils::SerializableTransactionMeta,
 };
-use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Transaction {
-    /// The transaction signature
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TransactionData {
     pub signature: Signature,
-    
-    /// The block slot this transaction was processed in
-    pub slot: u64,
-    
-    /// The transaction message containing the instructions
+    pub slot: Slot,
+    pub is_vote: bool,
     pub message: Message,
-    
-    /// The accounts required by this transaction
-    pub accounts: Vec<Pubkey>,
-    
-    /// Program instructions to execute
-    pub instructions: Vec<CompiledInstruction>,
-    
-    /// Recent blockhash this transaction requires
-    pub blockhash: String,
+    pub signatures: Vec<Signature>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub meta: TransactionStatusMeta,
+    #[serde(rename = "meta")]
+    pub serializable_meta: SerializableTransactionMeta,
+    pub index: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransactionUpdate {
-    /// The transaction data
-    pub transaction: Transaction,
-    
-    /// Status of the transaction execution
-    pub status: TransactionStatus,
-    
-    /// Any error that occurred during execution
-    pub error: Option<String>,
-    
-    /// Additional metadata about this transaction
-    pub metadata: HashMap<String, String>,
-    
-    /// Unix timestamp when this update was processed
-    pub timestamp: i64,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum TransactionStatus {
-    Processing,
-    Confirmed,
-    Failed,
+impl Debug for TransactionData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_struct("TransactionData")
+            .field("signature", &self.signature)
+            .field("slot", &self.slot)
+            .field("is_vote", &self.is_vote)
+            .field("message", &"[Message]")
+            .field("signatures_count", &self.signatures.len())
+            .field("meta", &"[TransactionStatusMeta]")
+            .field("index", &self.index)
+            .finish()
+    }
 }

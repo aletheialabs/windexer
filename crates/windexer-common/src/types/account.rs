@@ -1,42 +1,53 @@
-use serde::{Deserialize, Serialize};
-use solana_sdk::{account::Account, pubkey::Pubkey};
-use std::collections::HashMap;
+//! Account data types
+//!
+//! This module defines common data structures for working with account data
+//! across the wIndexer system.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use {
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::Signature,
+        clock::Slot,
+    },
+    serde::{Deserialize, Serialize},
+    std::fmt::{Debug, Formatter, Result as FmtResult},
+};
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AccountData {
     pub pubkey: Pubkey,
-    
-    pub owner: Pubkey,
-    
     pub lamports: u64,
-    
-    pub data: Vec<u8>,
-    
+    pub owner: Pubkey,
     pub executable: bool,
-    
     pub rent_epoch: u64,
+    
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
+    pub write_version: u64,
+    pub slot: Slot,
+    pub is_startup: bool,
+    pub transaction_signature: Option<Signature>,
 }
 
-impl From<Account> for AccountData {
-    fn from(account: Account) -> Self {
-        Self {
-            pubkey: Pubkey::default(), // Must be set externally
-            owner: account.owner,
-            lamports: account.lamports,
-            data: account.data,
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
-        }
+impl Debug for AccountData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_struct("AccountData")
+            .field("pubkey", &self.pubkey)
+            .field("lamports", &self.lamports)
+            .field("owner", &self.owner)
+            .field("executable", &self.executable)
+            .field("rent_epoch", &self.rent_epoch)
+            .field("data_len", &self.data.len())
+            .field("write_version", &self.write_version)
+            .field("slot", &self.slot)
+            .field("is_startup", &self.is_startup)
+            .field("transaction_signature", &self.transaction_signature)
+            .finish()
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountUpdate {
-    pub slot: u64,
-    
-    pub account: AccountData,
-    
-    pub metadata: HashMap<String, String>,
-    
-    pub timestamp: i64,
+pub fn deserialize_account<T: serde::de::DeserializeOwned>(
+    account_data: &AccountData,
+) -> Result<T, bincode::Error> {
+    bincode::deserialize(&account_data.data)
 }

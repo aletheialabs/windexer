@@ -6,30 +6,29 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-# Add Solana dependencies
-solana-program = "2.2.0"
-solana-sdk = "2.2.0"
+agave-geyser-plugin-interface.workspace = true
 
-# Serialization
+solana-program.workspace = true
+solana-sdk.workspace = true
+solana-transaction-status.workspace = true
+
 serde.workspace = true
 serde_json.workspace = true
+serde_bytes = "0.11.12"
+bincode.workspace = true
 
-# Error handling
 thiserror.workspace = true
 anyhow.workspace = true
 
-# Async utilities
 tokio.workspace = true
 futures.workspace = true
 async-trait.workspace = true
 
-# Logging
 tracing.workspace = true
+log.workspace = true
 
-# Cryptography
 chrono.workspace = true
 sha2.workspace = true
 
-# Utilities
 bytes.workspace = true
 bs58 = "0.5"

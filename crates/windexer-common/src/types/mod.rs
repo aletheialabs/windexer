@@ -1,14 +1,12 @@
-//! Core domain types used across the system
+//! Common data types used throughout the windexer system
 
-mod account;
-mod block;
-mod message;
-mod transaction;
+pub mod account;
+pub mod block;
+pub mod transaction;
 
-pub use account::{AccountData, AccountUpdate};
-pub use block::{Block, BlockUpdate};
-pub use message::{Message, MessageType, Topic};
-pub use transaction::{Transaction, TransactionUpdate};
+pub use account::AccountData;
+pub use block::{BlockData, EntryData, SlotStatusData};
+pub use transaction::TransactionData;
 
 use serde::{Deserialize, Serialize};
 
