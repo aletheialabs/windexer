@@ -29,12 +29,13 @@ impl SlashingMonitor {
 
     pub async fn should_slash(&mut self, operator: &Pubkey, violation: &ViolationType) -> Result<bool> {
         let severity = self.calculate_violation_severity(violation);
+        
         let records = self.violation_history
             .entry(*operator)
-            .or_default();
+            .or_insert_with(Vec::new);
             
         let violation_record = ViolationRecord {
-            timestamp: chrono::Utc::now().timestamp(),
+            timestamp: crate::utils::current_time(),
             violation_type: violation.clone(),
             severity,
         };
@@ -45,9 +46,10 @@ impl SlashingMonitor {
 
     fn calculate_violation_severity(&self, violation: &ViolationType) -> f64 {
         match violation {
-            ViolationType::Downtime => 0.5,
-            ViolationType::InvalidConsensus => 0.8,
-            ViolationType::MaliciousBehavior => 1.0,
+            ViolationType::LowUptime => 0.5,
+            ViolationType::DoubleProposal => 0.7,
+            ViolationType::DoubleVote => 0.8,
+            ViolationType::MaliciousValidation => 1.0,
         }
     }
 
@@ -60,5 +62,9 @@ impl SlashingMonitor {
             .sum();
             
         Ok(total_severity >= self.slash_threshold)
+    }
+
+    pub async fn check_uptime(&self, uptime: f64) -> Result<bool> {
+        Ok(uptime >= self.min_uptime)
     }
 }

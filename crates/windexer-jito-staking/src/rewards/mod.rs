@@ -12,6 +12,8 @@ pub struct RewardsManager {
     reward_calculator: Arc<RwLock<calculation::RewardCalculator>>,
     reward_distributor: Arc<RwLock<distribution::RewardDistributor>>,
     epoch_rewards: Arc<RwLock<HashMap<Pubkey, u64>>>,
+    reward_rate: f64,
+    distribution_interval: Duration,
 }
 
 impl RewardsManager {
@@ -20,6 +22,8 @@ impl RewardsManager {
             reward_calculator: Arc::new(RwLock::new(calculation::RewardCalculator::new(reward_rate))),
             reward_distributor: Arc::new(RwLock::new(distribution::RewardDistributor::new(distribution_interval))),
             epoch_rewards: Arc::new(RwLock::new(HashMap::new())),
+            reward_rate,
+            distribution_interval,
         }
     }
 
@@ -42,7 +46,7 @@ impl RewardsManager {
     }
 
     pub async fn distribution_interval(&self) -> Duration {
-        self.reward_distributor.read().await.distribution_interval()
+        self.distribution_interval
     }
 }
 

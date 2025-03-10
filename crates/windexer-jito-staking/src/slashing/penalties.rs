@@ -7,35 +7,32 @@ use crate::slashing::ViolationType;
 
 pub struct PenaltyCalculator {
     base_penalties: HashMap<ViolationType, u64>,
-    operator_multipliers: HashMap<Pubkey, f64>,
 }
 
 impl PenaltyCalculator {
     pub fn new() -> Self {
         let mut base_penalties = HashMap::new();
-        base_penalties.insert(ViolationType::Downtime, 1000);
-        base_penalties.insert(ViolationType::InvalidConsensus, 5000);
-        base_penalties.insert(ViolationType::MaliciousBehavior, 10000);
-
+        
+        // Initialize base penalty amounts for each violation type
+        base_penalties.insert(ViolationType::LowUptime, 1000);
+        base_penalties.insert(ViolationType::DoubleProposal, 5000);
+        base_penalties.insert(ViolationType::DoubleVote, 7500);
+        base_penalties.insert(ViolationType::MaliciousValidation, 10000);
+        
         Self {
             base_penalties,
-            operator_multipliers: HashMap::new(),
         }
     }
-
-    pub async fn calculate_penalty(&self, operator: &Pubkey, violation: &ViolationType) -> Result<u64> {
+    
+    pub async fn calculate_penalty(&self, _operator: &Pubkey, violation: &ViolationType) -> Result<u64> {
+        // Get base penalty for the violation type
         let base_penalty = self.base_penalties.get(violation)
-            .ok_or_else(|| anyhow::anyhow!("Unknown violation type"))?;
-            
-        let multiplier = self.operator_multipliers
-            .get(operator)
             .copied()
-            .unwrap_or(1.0);
+            .unwrap_or(1000); // Default penalty if violation type not found
             
-        Ok(((*base_penalty as f64) * multiplier) as u64)
-    }
-
-    pub fn update_operator_multiplier(&mut self, operator: &Pubkey, multiplier: f64) {
-        self.operator_multipliers.insert(*operator, multiplier);
+        // Here you could implement more complex logic to adjust penalty based on
+        // operator's history, stake amount, etc.
+        
+        Ok(base_penalty)
     }
 }

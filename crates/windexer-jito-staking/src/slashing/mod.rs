@@ -8,15 +8,25 @@ use anyhow::Result;
 pub mod monitor;
 pub mod penalties;
 
+use monitor::SlashingMonitor;
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub enum ViolationType {
+    LowUptime,
+    DoubleProposal,
+    DoubleVote,
+    MaliciousValidation,
+}
+
 pub struct SlashingManager {
-    monitor: Arc<RwLock<monitor::SlashingMonitor>>,
+    monitor: Arc<RwLock<SlashingMonitor>>,
     penalty_calculator: Arc<RwLock<penalties::PenaltyCalculator>>,
 }
 
 impl SlashingManager {
     pub fn new(slash_threshold: f64, min_uptime: f64) -> Self {
         Self {
-            monitor: Arc::new(RwLock::new(monitor::SlashingMonitor::new(slash_threshold, min_uptime))),
+            monitor: Arc::new(RwLock::new(SlashingMonitor::new(slash_threshold, min_uptime))),
             penalty_calculator: Arc::new(RwLock::new(penalties::PenaltyCalculator::new())),
         }
     }
@@ -37,11 +47,4 @@ impl SlashingManager {
         // Implement slashing execution logic
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub enum ViolationType {
-    Downtime,
-    InvalidConsensus,
-    MaliciousBehavior,
 }

@@ -1,21 +1,27 @@
 // crates/windexer-jito-staking/src/consensus/mod.rs
 
+//! Consensus module implementation
+
+mod metrics;
+mod validator;
+
 use anyhow::Result;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
+use std::time::Duration;
 
 pub struct ConsensusManager {
-    min_operators: usize,
+    min_validators: usize,
     consensus_threshold: f64,
     active_operators: Arc<RwLock<Vec<Pubkey>>>,
 }
 
 impl ConsensusManager {
-    pub fn new(min_operators: usize, consensus_threshold: f64) -> Self {
+    pub fn new(min_validators: usize, consensus_threshold: f64) -> Self {
         Self {
-            min_operators,
+            min_validators,
             consensus_threshold,
             active_operators: Arc::new(RwLock::new(Vec::new())),
         }
@@ -32,12 +38,12 @@ impl ConsensusManager {
 
     pub async fn check_consensus_threshold(&self) -> Result<bool> {
         let operators = self.active_operators.read().await;
-        if operators.len() < self.min_operators {
+        if operators.len() < self.min_validators {
             warn!("Not enough operators for consensus");
             return Ok(false);
         }
 
-        let active_ratio = operators.len() as f64 / self.min_operators as f64;
+        let active_ratio = operators.len() as f64 / self.min_validators as f64;
         Ok(active_ratio >= self.consensus_threshold)
     }
 }
