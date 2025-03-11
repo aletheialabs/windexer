@@ -9,19 +9,28 @@ license.workspace = true
 name = "node"
 path = "src/node.rs"
 
+[[bin]]
+name = "indexer"
+path = "src/indexer.rs"
+
 [dependencies]
+# Internal dependencies
 windexer-common = { path = "../windexer-common" }
 windexer-network = { path = "../windexer-network" }
 windexer-jito-staking = { path = "../windexer-jito-staking" }
+windexer-store = { path = "../windexer-store" }
 
-clap = { version = "4.0", features = ["derive"] }
-axum = "0.8.1"
-serde = { version = "1.0", features = ["derive"] }
-
-tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-anyhow.workspace = true
+# Solana
 solana-sdk.workspace = true
 
-ctrlc = "3.4"
+# Async runtime
+tokio.workspace = true
+
+# Utilities
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4.3.0", features = ["derive"] }
+
+# Networking
+ctrlc = "3.4.0"

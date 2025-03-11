@@ -6,7 +6,7 @@ BASE_PORT := 9000
 RPC_PORT_OFFSET := 1000
 DATA_DIR := ./data
 
-.PHONY: all build run-node clean demo
+.PHONY: all build run-node clean demo run-validator-with build-geyser run-indexer-1 run-indexer-2
 
 all: build
 
@@ -34,3 +34,17 @@ clean:
 demo: build
 	@./scripts/start-network.sh
 	@./scripts/demo-interact.sh
+
+run-validator-with-geyser: build-geyser
+	solana-test-validator \
+		--geyser-plugin-config config/geyser/windexer-geyser-config.json \
+		--reset
+
+build-geyser:
+	cargo build --package windexer-geyser
+
+run-indexer-1:
+	cargo run --bin indexer -- --index 1 --bootstrap-peers 127.0.0.1:9000
+
+run-indexer-2:
+	cargo run --bin indexer -- --index 2 --bootstrap-peers 127.0.0.1:9001

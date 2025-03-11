@@ -104,11 +104,52 @@ impl Node {
     pub async fn create_simple(config: NodeConfig) -> Result<(Self, tokio::sync::mpsc::Sender<()>)> {
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
         
-        let swarm = Arc::new(Mutex::new(dummy_swarm_placeholder()));
+        // Initialize libp2p keypair from Solana keypair
+        let keypair = match config.keypair.to_keypair() {
+            Ok(kp) => convert_keypair(&kp),
+            Err(e) => return Err(anyhow!("Failed to convert keypair: {}", e)),
+        };
+        
+        let peer_id = PeerId::from(keypair.public());
+        info!("Local peer id: {}", peer_id);
+        
+        // Create transport
+        let tcp_config = tcp::Config::default().nodelay(true);
+        let transport = tcp::tokio::Transport::new(tcp_config)
+            .upgrade(upgrade::Version::V1)
+            .authenticate(noise::Config::new(&keypair).expect("Valid noise config"))
+            .multiplex(yamux::Config::default())
+            .boxed();
+        
+        // Create gossipsub
+        let gossipsub_config = gossipsub::ConfigBuilder::default()
+            .heartbeat_interval(Duration::from_secs(10))
+            .validation_mode(ValidationMode::Strict)
+            .build()
+            .expect("Valid gossipsub config");
+            
+        let gossipsub = gossipsub::Behaviour::new(
+            MessageAuthenticity::Signed(keypair.clone()),
+            gossipsub_config,
+        ).expect("Valid gossipsub behavior");
+        
+        // Create mDNS for local peer discovery
+        let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)
+            .expect("Valid mDNS config");
+        
+        // Combine into node behavior
+        let behaviour = NodeBehaviour {
+            gossipsub,
+            mdns,
+        };
+        
+        // Create swarm with proper config method - using tokio executor
+        let swarm_config = SwarmConfig::with_tokio_executor();
+        let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
         
         let node = Self {
             config,
-            swarm,
+            swarm: Arc::new(Mutex::new(swarm)),
             metrics: Arc::new(RwLock::new(Metrics::new())),
             known_peers: Arc::new(RwLock::new(HashSet::new())),
             shutdown_rx,
@@ -268,19 +309,5 @@ impl Node {
     pub async fn stop(&self) -> Result<()> {
         // Implementation to properly shut down the node
         Ok(())
-    }
-}
-
-// Helper function to create a dummy Swarm
-fn dummy_swarm() -> Swarm<NodeBehaviour> {
-    unimplemented!("This is a dummy implementation that should never be called")
-}
-
-// A function that creates a placeholder for the Swarm without actually initializing it
-fn dummy_swarm_placeholder() -> Swarm<NodeBehaviour> {
-    unsafe {
-        // This is a hack to create a dummy Swarm instance without proper initialization
-        // It should never be used in actual code
-        std::mem::zeroed()
     }
 }
