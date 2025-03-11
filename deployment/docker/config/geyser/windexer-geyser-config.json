@@ -1,0 +1,23 @@
+{
+  "libpath": "/app/libwindexer_geyser.so",
+  "network": {
+    "node_id": "geyser-plugin",
+    "listen_addr": "0.0.0.0:9876", 
+    "rpc_addr": "0.0.0.0:9877",
+    "bootstrap_peers": ["node-1:9000", "node-2:9000"],
+    "data_dir": "/app/data/geyser",
+    "solana_rpc_url": "http://solana-validator:8899"
+  },
+  "accounts_selector": {
+    "accounts": ["*"],
+    "owners": null
+  },
+  "transaction_selector": {
+    "mentions": ["*"],
+    "include_votes": false
+  },
+  "thread_count": 4,
+  "batch_size": 100,
+  "use_mmap": true,
+  "panic_on_error": false
+} 
