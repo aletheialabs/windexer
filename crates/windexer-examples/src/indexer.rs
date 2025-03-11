@@ -174,7 +174,7 @@ async fn start_api_server(store: Arc<Store>, port: u16) -> Result<()> {
         .or(accounts_route)
         .or(transactions_route);
     
-    let addr = ([127, 0, 0, 1], port).into();
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     info!("Starting API server on {}", addr);
     tokio::spawn(warp::serve(routes).run(addr));
     
