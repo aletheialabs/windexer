@@ -32,8 +32,8 @@ clean:
 	@pkill -f '$(PROJECT)|solana-test-validator' || true
 
 demo: build
-	@./scripts/start-network.sh
-	@./scripts/demo-interact.sh
+	@./scripts/test-scripts/start-network.sh
+	@./scripts/test-scripts/demo-interact.sh
 
 run-validator-with-geyser: build-geyser
 	solana-test-validator \
