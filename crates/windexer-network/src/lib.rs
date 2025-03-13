@@ -35,7 +35,10 @@ pub enum NetworkError {
     SerializationError(#[from] bincode::Error),
 
     #[error("Libp2p error: {0}")]
-    Libp2pError(#[from] Box<dyn std::error::Error + Send + Sync>),
+    Libp2pError(String),
+    
+    #[error("Other error: {0}")]
+    Other(String),
 }
 
 pub type Result<T> = std::result::Result<T, NetworkError>;
@@ -46,7 +49,8 @@ pub use gossip::{GossipConfig, GossipMessage, MessageType};
 pub use consensus::config::ConsensusConfig;
 
 pub fn init_logging() {
-    tracing_subscriber::fmt::init();
+    use tracing_subscriber::fmt;
+    fmt::init();
 }
 
 pub const PROTOCOL_VERSION: &str = env!("CARGO_PKG_VERSION");
