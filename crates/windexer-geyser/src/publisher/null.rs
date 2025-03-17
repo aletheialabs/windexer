@@ -1,3 +1,10 @@
+// crates/windexer-geyser/src/publisher/null.rs
+
+//! Null publisher
+//!
+//! This module contains the implementation of a publisher that does nothing.
+//! It is used when the wIndexer network is not enabled.
+
 use {
     super::Publisher,
     anyhow::Result,

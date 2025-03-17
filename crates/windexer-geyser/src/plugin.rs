@@ -1,3 +1,5 @@
+// crates/windexer-geyser/src/plugin.rs
+
 //! wIndexer Geyser Plugin implementation
 //!
 //! This module contains the implementation of the GeyserPlugin trait for the wIndexer plugin.

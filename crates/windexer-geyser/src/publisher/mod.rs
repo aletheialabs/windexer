@@ -1,3 +1,5 @@
+// crates/windexer-geyser/src/publisher/mod.rs
+
 //! Data publishing module
 //!
 //! This module contains the interfaces and implementations for publishing processed data
