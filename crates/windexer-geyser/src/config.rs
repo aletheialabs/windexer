@@ -3,80 +3,88 @@
 //! This module contains the configuration types and parsing logic for the wIndexer Geyser plugin.
 
 use {
+    agave_geyser_plugin_interface::geyser_plugin_interface::{
+        GeyserPluginError, Result as PluginResult,
+    },
     serde::{Deserialize, Serialize},
     anyhow::{anyhow, Result},
     std::{
         fs::File,
         io::Read,
+        net::SocketAddr,
         path::Path,
         str::FromStr,
     },
     solana_sdk::{
         pubkey::Pubkey,
-        signer::keypair::Keypair,
+        signature::Keypair,
     },
-    windexer_network::NodeConfig as NetworkConfig,
-    bs58,
     windexer_common,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct GeyserPluginConfig {
-    pub libpath: String,
-    
-    pub network: NetworkConfig,
-    
-    pub accounts_selector: Option<AccountsSelector>,
-    
-    pub transaction_selector: Option<TransactionSelector>,
-    
-    #[serde(default = "default_thread_count")]
-    pub thread_count: usize,
-    
-    #[serde(default = "default_batch_size")]
-    pub batch_size: usize,
-    
-    #[serde(default)]
-    pub panic_on_error: bool,
-    
-    #[serde(default = "default_true")]
-    pub use_mmap: bool,
-    
-    pub node_pubkey: Option<String>,
-    
-    #[serde(default)]
-    pub metrics: MetricsConfig,
-    
-    #[serde(with = "keypair_serde")]
-    pub keypair: Keypair,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AccountsSelector {
-    pub accounts: Option<Vec<String>>,
-    
+    pub accounts: Vec<String>,
+    #[serde(default)]
     pub owners: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TransactionSelector {
     pub mentions: Vec<String>,
-    
     #[serde(default)]
     pub include_votes: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct NetworkConfig {
+    pub node_id: String,
+    pub listen_addr: SocketAddr,
+    pub rpc_addr: SocketAddr,
+    pub bootstrap_peers: Vec<String>,
+    pub data_dir: String,
+    pub solana_rpc_url: String,
+    #[serde(default)]
+    pub geyser_plugin_config: Option<String>,
+    #[serde(default)]
+    pub metrics_addr: Option<SocketAddr>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MetricsConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    
     #[serde(default = "default_metrics_interval")]
     pub interval_seconds: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SerializableKeypair(#[serde(with = "keypair_serde")] pub Keypair);
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GeyserPluginConfig {
+    pub libpath: String,
+    pub keypair: String, // Path to keypair file
+    #[serde(default)]
+    pub host: Option<String>,
+    pub network: NetworkConfig,
+    #[serde(default)]
+    pub accounts_selector: Option<AccountsSelector>,
+    #[serde(default)]
+    pub transaction_selector: Option<TransactionSelector>,
+    #[serde(default = "default_thread_count")]
+    pub thread_count: usize,
+    #[serde(default = "default_batch_size")]
+    pub batch_size: usize,
+    #[serde(default)]
+    pub node_pubkey: Option<String>,
+    #[serde(default)]
+    pub panic_on_error: bool,
+    #[serde(default = "default_true")]
+    pub use_mmap: bool,
+    #[serde(default)]
+    pub metrics: MetricsConfig,
+}
+
+// Simplified SerializableKeypair - only implements what we need
+pub struct SerializableKeypair(Keypair);
 
 impl SerializableKeypair {
     pub fn new(keypair: Keypair) -> Self {
@@ -94,85 +102,85 @@ impl Default for SerializableKeypair {
     }
 }
 
-mod keypair_serde {
-    use {
-        serde::{Deserialize, Deserializer, Serialize, Serializer},
-        solana_sdk::signer::keypair::Keypair,
-        bs58,
-    };
-
-    pub fn serialize<S>(keypair: &Keypair, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = bs58::encode(&keypair.to_bytes()).into_string();
-        s.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Keypair, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let bytes = bs58::decode(&s).into_vec().map_err(serde::de::Error::custom)?;
-        Keypair::from_bytes(&bytes).map_err(serde::de::Error::custom)
+impl Clone for SerializableKeypair {
+    fn clone(&self) -> Self {
+        let bytes = self.0.to_bytes();
+        Self(Keypair::from_bytes(&bytes).expect("Valid keypair bytes"))
     }
 }
 
 impl GeyserPluginConfig {
-    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let mut file = File::open(&path)
-            .map_err(|e| anyhow!("Failed to open config file: {}", e))?;
+    pub fn load_from_file<P: AsRef<Path>>(file_path: P) -> Result<Self, GeyserPluginError> {
+        let mut file = File::open(&file_path).map_err(|err| {
+            GeyserPluginError::ConfigFileOpenError(err)
+        })?;
         
         let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|e| anyhow!("Failed to read config file: {}", e))?;
+        file.read_to_string(&mut contents).map_err(|err| {
+            GeyserPluginError::ConfigFileReadError { msg: format!("Failed to read config file: {}", err) }
+        })?;
         
-        serde_json::from_str(&contents)
-            .map_err(|e| anyhow!("Failed to parse config file: {}", e))
+        Self::load_from_str(&contents)
     }
     
-    pub fn validate(&self) -> Result<()> {
-        if let Some(selector) = &self.accounts_selector {
-            if let Some(accounts) = &selector.accounts {
-                for account in accounts {
-                    if account != "*" {
-                        Pubkey::from_str(account)
-                            .map_err(|_| anyhow!("Invalid account pubkey: {}", account))?;
-                    }
-                }
+    pub fn load_from_str(config_str: &str) -> Result<Self, GeyserPluginError> {
+        serde_json::from_str(config_str).map_err(|err| {
+            GeyserPluginError::ConfigFileReadError { 
+                msg: format!("Failed to parse config file: {}", err) 
             }
-            
-            if let Some(owners) = &selector.owners {
-                for owner in owners {
-                    if owner == "*" {
-                    } else {
-                        Pubkey::from_str(owner)
-                            .map_err(|_| anyhow!("Invalid owner pubkey: {}", owner))?;
-                    }
-                }
-            }
+        })
+    }
+    
+    // Add the missing validate method
+    pub fn validate(&self) -> Result<(), String> {
+        // Basic validation checks
+        if self.libpath.is_empty() {
+            return Err("libpath cannot be empty".to_string());
         }
-        
-        if let Some(selector) = &self.transaction_selector {
-            for mention in &selector.mentions {
-                if mention != "*" && mention != "all_votes" {
-                    Pubkey::from_str(mention)
-                        .map_err(|_| anyhow!("Invalid mention pubkey: {}", mention))?;
-                }
-            }
+        if self.keypair.is_empty() {
+            return Err("keypair cannot be empty".to_string());
         }
-        
         Ok(())
+    }
+    
+    // Helper method to get accounts selector or default
+    pub fn get_accounts_selector(&self) -> AccountsSelector {
+        self.accounts_selector.clone().unwrap_or_else(|| AccountsSelector {
+            accounts: vec!["*".to_string()],
+            owners: None,
+        })
+    }
+    
+    // Helper method to get transaction selector or default
+    pub fn get_transaction_selector(&self) -> TransactionSelector {
+        self.transaction_selector.clone().unwrap_or_else(|| TransactionSelector {
+            mentions: vec!["*".to_string()],
+            include_votes: false,
+        })
+    }
+    
+    // Load keypair from file path - simplified to reduce dependencies
+    pub fn load_keypair(&self) -> Result<Keypair, GeyserPluginError> {
+        let keypair_bytes = std::fs::read(&self.keypair).map_err(|err| {
+            GeyserPluginError::ConfigFileReadError { 
+                msg: format!("Failed to read keypair file: {}", err) 
+            }
+        })?;
+        
+        Keypair::from_bytes(&keypair_bytes).map_err(|err| {
+            GeyserPluginError::ConfigFileReadError { 
+                msg: format!("Invalid keypair file format: {}", err) 
+            }
+        })
     }
 }
 
 fn default_thread_count() -> usize {
-    num_cpus::get().max(1)
+    4
 }
 
 fn default_batch_size() -> usize {
-    1000
+    100
 }
 
 fn default_true() -> bool {
@@ -180,7 +188,7 @@ fn default_true() -> bool {
 }
 
 fn default_metrics_interval() -> u64 {
-    60
+    15
 }
 
 impl Default for MetricsConfig {
@@ -196,6 +204,8 @@ impl Default for GeyserPluginConfig {
     fn default() -> Self {
         Self {
             libpath: "".to_string(),
+            keypair: "".to_string(),
+            host: None,
             network: NetworkConfig {
                 node_id: "windexer-node".to_string(),
                 listen_addr: "127.0.0.1:8900".parse().unwrap(),
@@ -203,7 +213,6 @@ impl Default for GeyserPluginConfig {
                 bootstrap_peers: vec![],
                 data_dir: "/tmp/windexer".to_string(),
                 solana_rpc_url: "http://127.0.0.1:8899".to_string(),
-                keypair: windexer_common::SerializableKeypair::default(),
                 geyser_plugin_config: None,
                 metrics_addr: None,
             },
@@ -215,25 +224,6 @@ impl Default for GeyserPluginConfig {
             panic_on_error: false,
             use_mmap: true,
             metrics: MetricsConfig::default(),
-            keypair: Keypair::new(),
-        }
-    }
-}
-
-impl Clone for GeyserPluginConfig {
-    fn clone(&self) -> Self {
-        Self {
-            libpath: self.libpath.clone(),
-            network: self.network.clone(),
-            accounts_selector: self.accounts_selector.clone(),
-            transaction_selector: self.transaction_selector.clone(),
-            thread_count: self.thread_count,
-            batch_size: self.batch_size,
-            panic_on_error: self.panic_on_error,
-            use_mmap: self.use_mmap,
-            node_pubkey: self.node_pubkey.clone(),
-            metrics: self.metrics.clone(),
-            keypair: Keypair::new(),
         }
     }
 }

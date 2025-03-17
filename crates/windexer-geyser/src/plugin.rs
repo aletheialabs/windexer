@@ -30,6 +30,8 @@ use {
     tokio::runtime::Runtime,
     anyhow::{anyhow, Result},
     windexer_network::Node as NetworkNode,
+    windexer_common::config::NodeConfig,
+    windexer_common::SerializableKeypair,
 };
 
 pub struct WindexerGeyserPlugin {
@@ -100,7 +102,19 @@ impl WindexerGeyserPlugin {
         };
         
         let (network_node, _shutdown_sender) = runtime.block_on(async {
-            NetworkNode::create_simple(config.network.clone())
+            let node_config = NodeConfig {
+                node_id: config.network.node_id.clone(),
+                listen_addr: config.network.listen_addr,
+                rpc_addr: config.network.rpc_addr,
+                bootstrap_peers: config.network.bootstrap_peers.clone(),
+                data_dir: config.network.data_dir.clone(),
+                keypair: SerializableKeypair::default(),
+                metrics_addr: config.network.metrics_addr,
+                geyser_plugin_config: config.network.geyser_plugin_config.clone(),
+                solana_rpc_url: config.network.solana_rpc_url.clone(),
+            };
+            
+            NetworkNode::create_simple(node_config)
                 .await
                 .map_err(|e| {
                     let error_msg = format!("Failed to create network node: {}", e);

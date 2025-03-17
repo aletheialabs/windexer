@@ -6,7 +6,7 @@ BASE_PORT := 9000
 RPC_PORT_OFFSET := 1000
 DATA_DIR := ./data
 
-.PHONY: all build run-node clean demo run-validator-with build-geyser run-indexer-1 run-indexer-2
+.PHONY: all build run-node clean demo run-validator-with build-geyser run-indexer-1 run-indexer-2 run-geyser clean-geyser
 
 all: build
 
@@ -48,3 +48,9 @@ run-indexer-1:
 
 run-indexer-2:
 	cargo run --bin indexer -- --index 2 --bootstrap-peers 127.0.0.1:9001
+
+run-geyser:
+	@scripts/windexer-geyser-fixed.sh
+
+clean-geyser:
+	@rm -rf windexer_geyser_setup
