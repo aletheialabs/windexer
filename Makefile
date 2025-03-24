@@ -38,7 +38,8 @@ demo: build
 run-validator-with-geyser: build-geyser
 	solana-test-validator \
 		--geyser-plugin-config config/geyser/windexer-geyser-config.json \
-		--reset
+		--reset \
+		--no-faucet
 
 build-geyser:
 	cargo build --package windexer-geyser
@@ -50,7 +51,7 @@ run-indexer-2:
 	cargo run --bin indexer -- --index 2 --bootstrap-peers 127.0.0.1:9001
 
 run-geyser:
-	@scripts/windexer-geyser-fixed.sh
+	@./scripts/setup-windexer-geyser.sh
 
 clean-geyser:
 	@rm -rf windexer_geyser_setup

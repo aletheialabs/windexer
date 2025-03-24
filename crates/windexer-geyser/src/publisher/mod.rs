@@ -51,7 +51,7 @@ impl PublisherConfig {
     }
 }
 
-pub trait Publisher: Send + Sync + 'static {
+pub trait Publisher: Send + Sync + std::fmt::Debug + 'static {
     fn publish_accounts(&self, accounts: &[AccountData]) -> Result<()>;
     fn publish_transactions(&self, transactions: &[TransactionData]) -> Result<()>;
     fn publish_block(&self, block: BlockData) -> Result<()>;

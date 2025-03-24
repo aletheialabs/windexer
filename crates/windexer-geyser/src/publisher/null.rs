@@ -9,6 +9,7 @@ use {
     },
 };
 
+#[derive(Debug)]
 pub struct NullPublisher;
 
 impl NullPublisher {

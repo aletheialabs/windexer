@@ -20,11 +20,11 @@ use {
             GeyserPluginError,
         },
     },
-    log::{Log, LevelFilter, error, info},
+    log::{Log, LevelFilter, error, info, warn},
     solana_sdk::clock::Slot,
     std::{
         fmt::{Debug, Formatter, Result as FmtResult},
-        sync::{Arc, Mutex},
+        sync::{Arc, Mutex, RwLock},
         str::FromStr,
     },
     tokio::runtime::Runtime,
@@ -33,6 +33,13 @@ use {
     windexer_common::config::NodeConfig,
     windexer_common::SerializableKeypair,
 };
+
+#[derive(Debug)]
+struct PluginState {
+    config: GeyserPluginConfig,
+    publisher: Arc<dyn Publisher>,
+    runtime: Option<Runtime>,
+}
 
 pub struct WindexerGeyserPlugin {
     config: GeyserPluginConfig,
@@ -46,6 +53,7 @@ pub struct WindexerGeyserPlugin {
     network_node: Arc<Mutex<Option<NetworkNode>>>,
     version: PluginVersion,
     initialized: Arc<std::sync::atomic::AtomicBool>,
+    plugin_state: Arc<RwLock<Option<PluginState>>>,
 }
 
 impl WindexerGeyserPlugin {
@@ -65,6 +73,7 @@ impl WindexerGeyserPlugin {
             network_node: Arc::new(Mutex::new(None)),
             version: PluginVersion::new(),
             initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            plugin_state: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -243,6 +252,43 @@ impl WindexerGeyserPlugin {
         
         info!("wIndexer Geyser plugin cleanup completed");
     }
+
+    fn debug_plugin_init(&self, stage: &str, message: &str) {
+        info!("PLUGIN_INIT: {} - {}", stage, message);
+    }
+    
+    pub fn load_plugin(&self, config_path: &str) -> Result<()> {
+        info!("Loading wIndexer Geyser plugin with config path: {}", config_path);
+        self.debug_plugin_init("ON_LOAD", "Started plugin loading");
+        
+        let mut config = match GeyserPluginConfig::load_from_file(config_path) {
+            Ok(config) => {
+                self.debug_plugin_init("CONFIG", "Successfully loaded config");
+                config
+            },
+            Err(e) => {
+                error!("Failed to load config: {}", e);
+                return Err(anyhow::anyhow!("Failed to load config: {}", e));
+            }
+        };
+        
+        self.debug_plugin_init("PUBLISHER", "Creating publisher");
+        
+        let publisher = Arc::new(NullPublisher::new());
+        
+        self.debug_plugin_init("STATE", "Setting up plugin state");
+        
+        let plugin_state = PluginState {
+            config,
+            publisher,
+            runtime: None,
+        };
+        
+        *self.plugin_state.write().unwrap() = Some(plugin_state);
+        
+        self.debug_plugin_init("COMPLETE", "Plugin loaded successfully");
+        Ok(())
+    }
 }
 
 impl Debug for WindexerGeyserPlugin {
@@ -275,7 +321,12 @@ impl GeyserPlugin for WindexerGeyserPlugin {
             self.on_unload();
         }
         
-        self.initialize(config_file)?;
+        if let Err(e) = self.load_plugin(config_file) {
+            return Err(GeyserPluginError::Custom(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string()
+            ))));
+        }
         
         self.initialized.store(true, std::sync::atomic::Ordering::SeqCst);
         
