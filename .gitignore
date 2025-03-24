@@ -14,5 +14,4 @@ test-ledger/
 
 temp/
 scripts/test-scripts/
-config/geyser/geyser-keypair.json
-config/geyser/geyser-config.json
+config/

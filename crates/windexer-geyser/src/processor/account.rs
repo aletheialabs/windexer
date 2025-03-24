@@ -103,20 +103,19 @@ impl AccountProcessor {
         let mut include_all_accounts = false;
         
         if let Some(selector) = selector {
-            if let Some(accounts) = &selector.accounts {
-                if accounts.contains(&"*".to_string()) {
-                    include_all_accounts = true;
-                } else {
-                    let mut account_set = HashSet::new();
-                    for account in accounts {
-                        if let Ok(pubkey) = Pubkey::from_str(account) {
-                            account_set.insert(pubkey);
-                        } else {
-                            warn!("Invalid account pubkey in selector: {}", account);
-                        }
+            let accounts = &selector.accounts;
+            if accounts.contains(&"*".to_string()) {
+                include_all_accounts = true;
+            } else {
+                let mut account_set = HashSet::new();
+                for account in accounts {
+                    if let Ok(pubkey) = Pubkey::from_str(account) {
+                        account_set.insert(pubkey);
+                    } else {
+                        warn!("Invalid account pubkey in selector: {}", account);
                     }
-                    included_accounts = Some(account_set);
                 }
+                included_accounts = Some(account_set);
             }
             
             if let Some(owners) = &selector.owners {

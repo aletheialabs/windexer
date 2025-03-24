@@ -59,8 +59,8 @@ pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
     Box::into_raw(boxed)
 }
 
-/// Shutdown flag that can be used to gracefully terminate background tasks
-pub(crate) struct ShutdownFlag(AtomicBool);
+#[derive(Debug)]
+pub struct ShutdownFlag(AtomicBool);
 
 impl ShutdownFlag {
     pub fn new() -> Self {
