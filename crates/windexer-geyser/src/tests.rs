@@ -1,3 +1,5 @@
+// crates/windexer-geyser/src/tests.rs
+
 //! Tests for the wIndexer Geyser plugin
 //!
 //! This module contains tests for the plugin implementation.

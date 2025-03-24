@@ -31,5 +31,12 @@ solana-sdk.workspace = true
 # Add this in the dependencies section
 hex = "0.4.3"
 
+# Make sure clap is in dependencies
+clap = { version = "4.4", features = ["derive"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
+
+[[bin]]
+name = "windexer-network"
+path = "src/main.rs"

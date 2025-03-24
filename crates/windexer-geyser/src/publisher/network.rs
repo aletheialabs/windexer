@@ -1,3 +1,5 @@
+// crates/windexer-geyser/src/publisher/network.rs
+
 //! Network data publisher
 //!
 //! This module contains the implementation of a publisher that sends data to the

@@ -1,3 +1,5 @@
+// crates/windexer-geyser/src/config.rs
+
 //! Plugin configuration handling
 //!
 //! This module contains the configuration types and parsing logic for the wIndexer Geyser plugin.
