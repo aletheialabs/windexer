@@ -2,7 +2,7 @@
   <h1>wIndexer</h1>
   <p>A distributed blockchain indexing solution for Solana</p>
   
-  [![License: MIT/Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue.svg)](LICENSE)
+  [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 </div>
 
 ## Overview
