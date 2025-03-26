@@ -1,0 +1,34 @@
+services:
+  camb-avs:
+    image: ghcr.io/cambrianone/camb-avs:${IMAGE_TAG:-latest}
+    restart: always
+    ports:
+      - '${AVS_PORT:-3000}:3000'
+      - '${AVS_WS_PORT:-3001}:3001'
+    healthcheck:
+      test: curl --fail http://localhost:3000/status || exit 1
+      interval: 2s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    environment:
+      LOG_LEVEL: '${LOG_LEVEL}'
+      ADMIN_KEY: '${ADMIN_KEY:-PLvB3PT1k7dLMjmqTG35pkCj7y5TWds1g7dAKEd8WKpT8PG1cVashHUmwFH6vDD9b6ZNr4xRYKyXMSMKdC3LgAz}'
+      VAULT_PUBLIC_KEY: '${VAULT_PUBLIC_KEY:-He2t8xrgduxVRXMJfvFx8epTEMzJBqi61MApHnBsdZAT}'
+      NCN_PUBLIC_KEY: '${NCN_PUBLIC_KEY:-3ZmFVYhSgXtPvbmJuX6KvULBAV29XZPtB2L5citoJmkw}'
+      POA_NAME: '${POA_NAME:-cambrian_devnet_1742982123}'
+      API_URL: '${API_URL:-https://devnet.helius-rpc.com/?api-key=5daea224-93bd-415d-ac58-9e5777656acf}'
+      API_WS_URL: '${API_WS_URL:-wss://devnet.helius-rpc.com/?api-key=5daea224-93bd-415d-ac58-9e5777656acf}'
+      STAKE_THRESHOLD: '${STAKE_THRESHOLD:-1000}'
+      PROPOSAL_STORAGE_KEY: '${PROPOSAL_STORAGE_KEY:-}'
+      STORAGE_SPACE: '${STORAGE_SPACE:-75}'
+      
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      
+  # camb-log-service:
+  #   image: amir20/dozzle:latest
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   ports:
+  #     - 8080:8080
