@@ -16,12 +16,14 @@ pub mod rewards;
 pub mod slashing;
 pub mod consensus;
 pub mod utils;
+pub mod cambrian;
 
 pub use staking::types::{StakingConfig, OperatorStats};
 pub use staking::StakingManager;
 pub use consensus::ConsensusManager;
 pub use rewards::RewardsManager;
 pub use slashing::{SlashingManager, ViolationType};
+pub use cambrian::{CambrianConfig, CambrianService};
 
 pub struct JitoStakingService {
     staking_manager: Arc<StakingManager>,

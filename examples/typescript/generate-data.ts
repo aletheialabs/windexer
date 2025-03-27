@@ -27,7 +27,7 @@ async function main() {
     fs.writeFileSync(keyPath, JSON.stringify(Array.from(payer.secretKey)));
     console.log('Created new payer:', payer.publicKey.toString());
   }
-  
+
   let balance = await connection.getBalance(payer.publicKey);
   console.log('Current balance:', balance / LAMPORTS_PER_SOL, 'SOL');
   

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  avs-service:
+    image: node:18
+    container_name: cambrian-avs
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - ./configs/avs-wallet.json:/app/avs-wallet.json
+    environment:
+      - SOLANA_RPC_URL=https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY:-5daea224-93bd-415d-ac58-9e5777656acf}
+      - SOLANA_WS_URL=wss://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY:-5daea224-93bd-415d-ac58-9e5777656acf}
+      - CAMBRIAN_POA_NAME=${CAMBRIAN_POA_NAME:-cambrian_devnet_demo}
+      - AVS_ADMIN_KEY=/app/avs-wallet.json
+      - AVS_HTTP_PORT=3000
+      - AVS_WS_PORT=3001
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    command: >
+      bash -c "npm install -g @cambrianone/camb-client && 
+              camb start-avs"
+    restart: unless-stopped
+
+  windexer-service:
+    image: node:18
+    container_name: windexer
+    depends_on:
+      - avs-service
+    environment:
+      - SOLANA_RPC_URL=https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY:-5daea224-93bd-415d-ac58-9e5777656acf}
+      - AVS_ENDPOINT=http://avs-service:3000
+    ports:
+      - "9000:9000"
+    command: >
+      bash -c "echo 'Windexer service mock started' && 
+              tail -f /dev/null"
+    restart: unless-stopped

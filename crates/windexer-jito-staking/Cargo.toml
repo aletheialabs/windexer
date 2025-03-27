@@ -22,7 +22,15 @@ futures = "0.3"
 anyhow.workspace = true
 thiserror = "2.0"
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 chrono = "0.4"
+clap = { version = "4.4.18", features = ["derive"] }
+
+# Cambrian Dependencies
+borsh = "1.5.7"
+anchor-lang = "0.31.0"
+
+hyper = { version = "0.14", features = ["full"] }
 
 # Logging
 tracing.workspace = true
@@ -35,3 +43,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "windexer-jito-staking"
 path = "src/main.rs"
+
+[[bin]]
+name = "windexer-avs"
+path = "src/bin/avs.rs"

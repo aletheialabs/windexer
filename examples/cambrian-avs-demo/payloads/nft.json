@@ -1,0 +1,9 @@
+{
+            "type": "nft",
+            "data": {
+                "action": "create",
+                "name": "Demo NFT",
+                "symbol": "DEMO",
+                "uri": "https://example.com/metadata.json"
+            }
+        }
