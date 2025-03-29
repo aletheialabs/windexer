@@ -7,7 +7,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
 
-// Path to payload directory
 const payloadDir = path.join(projectRoot, 'examples', 'payloads', 'check-oracle');
 
 async function executeProposal() {
@@ -33,8 +32,8 @@ async function executeProposal() {
     
   } catch (error) {
     console.error('Error executing proposal:', error);
-    if (error.response) {
-      console.error('Response:', error.response.data);
+    if (error instanceof Error && 'response' in error) {
+      console.error('Response:', (error as any).response.data);
     }
   }
 }
