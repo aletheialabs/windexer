@@ -46,5 +46,26 @@ mod tests {
     async fn test_redis_database() {
         let client = Client::open("redis://localhost:6379").unwrap();
         let db = RedisDatabase::new(client);
+        let schema = db.get_schema();
+        let store = db.get_store();
+        assert_eq!(schema.name(), "test");
+        assert_eq!(store.name(), "test");
+        assert_eq!(schema.version(), "1.0.0");
+        assert_eq!(store.version(), "1.0.0");
+        assert_eq!(schema.description(), "test");
+        assert_eq!(store.description(), "test");
+        assert_eq!(schema.author(), "test");
+        assert_eq!(store.author(), "test");
+        assert_eq!(schema.license(), "test");
+    }
+
+    #[tokio::test]
+    async fn test_redis_store() {
+        let client = Client::open("redis://localhost:6379").unwrap();
+        let db = RedisDatabase::new(client);
+        let store = db.get_store();
+        assert_eq!(store.name(), "test");
     }
 }
+
+
