@@ -111,5 +111,86 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under GPL-3.0-or-later. See the [LICENSE](LICENSE) file for details.
 
+## Features
+
+- Fast and efficient data ingestion from Solana blockchain
+- Multiple storage backend options (RocksDB, Parquet, PostgreSQL)
+- Configurable accounts and transaction filtering
+- Hot/cold storage separation for optimal performance
+- Robust metrics and monitoring
+
+## Storage Options
+
+wIndexer now supports multiple storage backends to suit different use cases:
+
+### RocksDB (Default)
+
+The default storage option, optimized for high-throughput write operations.
+
+- **Pros**: Fast writes, good for hot storage
+- **Cons**: Limited query capabilities
+- **Best for**: Real-time data ingestion, recent data access
+
+### Apache Parquet
+
+Columnar storage format optimal for analytics workloads.
+
+- **Pros**: Excellent compression (3-4x better than JSON), high query performance
+- **Cons**: Append-only, not suited for frequent updates
+- **Best for**: Analytics, cold storage, historical data
+
+### PostgreSQL
+
+Relational database with rich query capabilities.
+
+- **Pros**: SQL queries, excellent for complex analytics, point-in-time recovery
+- **Cons**: Higher resource usage, slower writes than specialized options
+- **Best for**: Complex queries, local development, transaction analysis
+
+## Hot/Cold Storage Architecture
+
+wIndexer supports a hot/cold storage architecture:
+
+1. **Hot Storage**: Recent data stored in RocksDB for fast access
+2. **Cold Storage**: Historical data archived in Parquet or PostgreSQL
+
+This approach provides the best of both worlds:
+- Fast write performance during data ingestion
+- Excellent query performance for analytics on historical data
+
+## Configuration
+
+Example configuration with multiple storage options:
+
+```json
+{
+  "storage": {
+    "storage_type": "rocksdb",     // Primary storage type (rocksdb, parquet, postgres)
+    "rocksdb_path": "/path/to/rocksdb",
+    "hot_cold_separation": true,   // Enable hot/cold storage separation
+    "parquet": {
+      "directory": "/path/to/parquet",
+      "max_file_size_mb": 256,
+      "compression_enabled": true,
+      "partition_by_slot": true    // Create separate files by slot ranges
+    },
+    "postgres": {
+      "connection_string": "postgres://user:password@localhost:5432/windexer",
+      "create_tables": true,
+      "batch_size": 1000,
+      "max_connections": 10
+    }
+  }
+}
+```
+
+## Installation
+
+[Installation instructions...]
+
+## Usage
+
+[Usage instructions...]
+
 
 

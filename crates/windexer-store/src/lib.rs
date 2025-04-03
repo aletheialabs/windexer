@@ -1,6 +1,17 @@
 //! This is the windexer-store crate - handles data storage and caching
 
+mod internal;
+pub mod traits;
+pub mod factory;
+pub mod parquet_store;
+pub mod postgres_store;
+
+// Re-export for backward compatibility
+pub use internal::*;
+
 use {
+    traits::Storage,
+    async_trait::async_trait,
     anyhow::{anyhow, Result},
     std::{
         path::PathBuf,
@@ -91,4 +102,111 @@ impl Store {
     }
     
     // Add methods for retrieving data, etc.
+}
+
+#[async_trait]
+impl Storage for Store {
+    async fn store_account(&self, account: AccountData) -> Result<()> {
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            let store = self.clone();
+            store.store_account(account)
+        }).await?
+    }
+    
+    async fn store_transaction(&self, transaction: TransactionData) -> Result<()> {
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            let store = self.clone();
+            store.store_transaction(transaction)
+        }).await?
+    }
+    
+    async fn store_block(&self, block: BlockData) -> Result<()> {
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            let store = self.clone();
+            store.store_block(block)
+        }).await?
+    }
+    
+    async fn get_account(&self, pubkey: &str) -> Result<Option<AccountData>> {
+        let pubkey = pubkey.to_string(); // Clone for moving into task
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            store.get_account(&pubkey)
+        }).await?
+    }
+    
+    async fn get_transaction(&self, signature: &str) -> Result<Option<TransactionData>> {
+        let signature = signature.to_string(); // Clone for moving into task
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            store.get_transaction(&signature)
+        }).await?
+    }
+    
+    async fn get_block(&self, slot: u64) -> Result<Option<BlockData>> {
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            store.get_block(slot)
+        }).await?
+    }
+    
+    async fn get_recent_accounts(&self, limit: usize) -> Result<Vec<AccountData>> {
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            Ok(store.get_recent_accounts(limit))
+        }).await?
+    }
+    
+    async fn get_recent_transactions(&self, limit: usize) -> Result<Vec<TransactionData>> {
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            Ok(store.get_recent_transactions(limit))
+        }).await?
+    }
+    
+    async fn get_recent_blocks(&self, limit: usize) -> Result<Vec<BlockData>> {
+        // For now, return empty since the sync API doesn't have this
+        Ok(Vec::new())
+    }
+    
+    async fn get_accounts_by_slot_range(&self, start_slot: u64, end_slot: u64, limit: usize) -> Result<Vec<AccountData>> {
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            store.get_accounts_by_slot_range(start_slot, end_slot, limit)
+        }).await?
+    }
+    
+    async fn get_transactions_by_slot_range(&self, start_slot: u64, end_slot: u64, limit: usize) -> Result<Vec<TransactionData>> {
+        let store = self.clone();
+        
+        // Call the sync version in a way that doesn't block
+        tokio::task::spawn_blocking(move || {
+            store.get_transactions_by_slot_range(start_slot, end_slot, limit)
+        }).await?
+    }
+    
+    async fn get_blocks_by_slot_range(&self, start_slot: u64, end_slot: u64, limit: usize) -> Result<Vec<BlockData>> {
+        // For now, return empty since the sync API doesn't have this
+        Ok(Vec::new())
+    }
+    
+    async fn close(&self) -> Result<()> {
+        // No explicit close needed for RocksDB
+        Ok(())
+    }
 }

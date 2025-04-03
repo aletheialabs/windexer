@@ -11,9 +11,12 @@ AVS_DEMO_DIR    := ./avs-demo
 SCRIPTS_DIR     := ./scripts
 GEYSER_CONFIG   := config/geyser/windexer-geyser-config.json
 AVS_WALLET_FILE := $(AVS_DEMO_DIR)/configs/avs-wallet.json # Default location for Cambrian demo wallet
+AGAVE_RPC_URL := https://api.mainnet-beta.solana.com  # Replace with actual Agave RPC URL
+AGAVE_WS_URL := wss://api.mainnet-beta.solana.com     # Replace with actual Agave WS URL
 
 # Phony targets (targets that don't represent files)
 .PHONY: all build run-node-% run-local-network stop-local-network clean \
+	test fmt lint build-release doc logs-local-network \
 	demo run-validator-with-geyser build-geyser run-geyser clean-geyser \
 	init-avs init-avs-devnet init-avs-local init-avs-devnet-with-backoff \
 	init-avs-quicknode init-avs-helius init-avs-devnet-extreme-backoff \
@@ -21,15 +24,40 @@ AVS_WALLET_FILE := $(AVS_DEMO_DIR)/configs/avs-wallet.json # Default location fo
 	clean-init kill-validator run-validator-clean check-solana-devnet \
 	cambrian-demo-setup cambrian-demo-start cambrian-demo-stop \
 	cambrian-demo-status cambrian-demo-proposal cambrian-demo-proposal-% \
-	cambrian-demo-clean cambrian-demo help
+	cambrian-demo-clean cambrian-demo help \
+	run-agave-network
 
 # Default target
 all: help
 
 # --- Build ---
 build:
-	@echo "Building workspace..."
+	@echo "Building workspace (debug)..."
 	@$(CARGO) build --workspace
+
+# --- Release Build ---
+build-release:
+	@echo "Building workspace (release)..."
+	@$(CARGO) build --release --workspace
+
+# --- Testing ---
+test:
+	@echo "Running tests..."
+	@$(CARGO) test --workspace
+
+# --- Formatting & Linting ---
+fmt:
+	@echo "Checking formatting..."
+	@$(CARGO) fmt --all -- --check
+
+lint:
+	@echo "Running clippy linter..."
+	@$(CARGO) clippy --all-targets --all-features -- -D warnings
+
+# --- Documentation ---
+doc:
+	@echo "Building documentation..."
+	@$(CARGO) doc --no-deps --open
 
 # --- Local Network ---
 # Runs a single node with a specific index
@@ -43,19 +71,45 @@ run-node-%: build
 # Runs multiple nodes locally in the background
 run-local-network: build
 	@echo "Starting local network with $(NODES) nodes..."
+	@mkdir -p $(DATA_DIR) # Ensure data directory exists
 	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
+		mkdir -p $(DATA_DIR)/node_$$i; \
+		echo "Starting node $$i, logging to $(DATA_DIR)/node_$$i/node.log"; \
 		$(CARGO) run --bin node -- \
 			--index $$i \
 			--base-port $(BASE_PORT) \
-			--enable-tip-route & \
+			--enable-tip-route > $(DATA_DIR)/node_$$i/node.log 2>&1 & \
+		echo $$! > $(DATA_DIR)/node_$$i/node.pid; \
 	done
-	@echo "Local network started."
+	@echo "Local network started. Node PIDs in $(DATA_DIR)/node_*/node.pid, logs in $(DATA_DIR)/node_*/node.log"
+	@echo "Run 'make logs-local-network' to view logs."
 
 # Stops the local network nodes started by run-local-network
 stop-local-network:
 	@echo "Stopping local network nodes..."
-	@pkill -f '$(CARGO) run --bin node' || true
+	@echo "Stopping node processes..."
+	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
+		if [ -f $(DATA_DIR)/node_$$i/node.pid ]; then \
+			PID=$$(cat $(DATA_DIR)/node_$$i/node.pid); \
+			echo "Stopping node $$i (PID: $$PID)..."; \
+			kill $$PID 2>/dev/null || true; \
+			rm -f $(DATA_DIR)/node_$$i/node.pid; \
+		else \
+			echo "PID file for node $$i not found."; \
+		fi \
+	done
+	@# Fallback pkill in case PIDs weren't tracked correctly
+	@pkill -f '$(CARGO) run --bin node.*--index' || true
 	@echo "Local network nodes stopped."
+
+# --- Log Tailing ---
+logs-local-network:
+	@echo "Tailing logs for all local nodes (Press Ctrl+C to stop)..."
+	@if ! ls $(DATA_DIR)/node_*/node.log > /dev/null 2>&1; then \
+		echo "No log files found in $(DATA_DIR)/node_*/. Is the local network running?"; \
+		exit 1; \
+	fi
+	@tail -f $(DATA_DIR)/node_*/node.log
 
 # --- Cleaning ---
 clean: stop-local-network kill-validator clean-geyser cambrian-demo-clean
@@ -88,6 +142,11 @@ run-validator-with-geyser: build-geyser
 run-geyser:
 	@echo "Setting up Windexer Geyser..."
 	@$(SCRIPTS_DIR)/setup-windexer-geyser.sh
+
+# Setup geyser without starting the faucet (for mainnet use)
+run-geyser-mainnet: build-geyser
+	@echo "Setting up Windexer Geyser for mainnet use (no faucet)..."
+	@$(SCRIPTS_DIR)/setup-windexer-geyser.sh --no-faucet
 
 clean-geyser:
 	@echo "Cleaning Geyser setup..."
@@ -253,13 +312,19 @@ help:
 	@echo ""
 	@echo "Core Targets:"
 	@echo "  help                          Show this help message"
-	@echo "  build                         Build the Rust workspace"
+	@echo "  build                         Build the Rust workspace (debug)"
+	@echo "  build-release                 Build the Rust workspace (optimized release)"
 	@echo "  clean                         Clean build artifacts, data, logs, and stop services"
+	@echo "  test                          Run Rust tests"
+	@echo "  fmt                           Check code formatting"
+	@echo "  lint                          Run clippy linter"
+	@echo "  doc                           Build and open project documentation"
 	@echo ""
 	@echo "Local Network:"
 	@echo "  run-local-network             Start $(NODES) nodes locally in the background"
 	@echo "  stop-local-network            Stop the local network nodes"
 	@echo "  run-node-<index>              Run a single node (e.g., make run-node-0)"
+	@echo "  logs-local-network            Tail the logs of all running local nodes"
 	@echo ""
 	@echo "Geyser & Validator:"
 	@echo "  build-geyser                  Build the Geyser plugin"
@@ -299,3 +364,27 @@ help:
 
 # Note: The previous help:: target was removed in favor of the comprehensive help target above.
 # If you need specific help sections, they can be added back using the :: syntax if desired.
+
+# Add new target for running nodes with Agave mainnet
+run-agave-network: build-geyser
+	@echo "Setting up Windexer nodes with Agave mainnet..."
+	@echo "1. Setting up Geyser plugin..."
+	@$(MAKE) run-geyser-mainnet
+	@echo "2. Starting $(NODES) indexer nodes..."
+	@mkdir -p $(DATA_DIR)
+	@for i in $$(seq 0 $(shell echo $$(($(NODES)-1)))); do \
+		mkdir -p $(DATA_DIR)/node_$$i; \
+		echo "Starting node $$i, logging to $(DATA_DIR)/node_$$i/node.log"; \
+		$(CARGO) run --bin node -- \
+			--index $$i \
+			--base-port $(BASE_PORT) \
+			--enable-tip-route \
+			--rpc-url $(AGAVE_RPC_URL) \
+			--ws-url $(AGAVE_WS_URL) \
+			--disable-faucet \
+			> $(DATA_DIR)/node_$$i/node.log 2>&1 & \
+		echo $$! > $(DATA_DIR)/node_$$i/node.pid; \
+	done
+	@echo "✅ Agave network setup complete with $(NODES) nodes"
+	@echo "📝 Logs available at $(DATA_DIR)/node_*/node.log"
+	@echo "Run 'make logs-local-network' to view logs"

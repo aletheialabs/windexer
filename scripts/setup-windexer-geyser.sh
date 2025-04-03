@@ -3,6 +3,19 @@ set -e
 
 echo "🔧 Setting up windexer-geyser plugin..."
 
+# Default settings
+SKIP_FAUCET=false
+
+# Parse arguments
+for arg in "$@"; do
+  case $arg in
+    --no-faucet)
+    SKIP_FAUCET=true
+    shift
+    ;;
+  esac
+done
+
 mkdir -p config/geyser
 mkdir -p windexer_geyser_setup
 
@@ -48,10 +61,22 @@ export WINDEXER_SKIP_NETWORK=1
 
 echo "✅ Setup complete!"
 echo "Running solana-test-validator with windexer-geyser plugin..."
-WINDEXER_SKIP_NETWORK=1 RUST_BACKTRACE=1 RUST_LOG=solana_geyser_plugin_manager=debug,windexer_geyser=debug \
-solana-test-validator \
-  --geyser-plugin-config config/geyser/windexer-geyser-config.json \
-  --reset &
+
+# Configure validator command with or without faucet
+if [ "$SKIP_FAUCET" = true ]; then
+  echo "Running without faucet (--no-faucet mode)..."
+  WINDEXER_SKIP_NETWORK=1 RUST_BACKTRACE=1 RUST_LOG=solana_geyser_plugin_manager=debug,windexer_geyser=debug \
+  solana-test-validator \
+    --geyser-plugin-config config/geyser/windexer-geyser-config.json \
+    --reset &
+else
+  echo "Running with faucet..."
+  WINDEXER_SKIP_NETWORK=1 RUST_BACKTRACE=1 RUST_LOG=solana_geyser_plugin_manager=debug,windexer_geyser=debug \
+  solana-test-validator \
+    --geyser-plugin-config config/geyser/windexer-geyser-config.json \
+    --reset \
+    --faucet-port 9910 &
+fi
 
 VALIDATOR_PID=$!
 echo "Waiting for validator to initialize (PID: $VALIDATOR_PID)..."
@@ -72,4 +97,5 @@ for i in {1..60}; do  # Increased to 60 seconds
   sleep 1
 done
 
-wait $VALIDATOR_PID
+# Don't wait for the validator process, let it run in background
+echo "Validator running in background with PID: $VALIDATOR_PID"
