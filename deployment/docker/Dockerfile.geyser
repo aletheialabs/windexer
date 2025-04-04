@@ -1,4 +1,4 @@
-FROM rust:1.76-slim-bullseye as builder
+FROM rust:latest as builder
 
 WORKDIR /app
 
@@ -21,6 +21,7 @@ COPY crates/windexer-jito-staking/Cargo.toml ./crates/windexer-jito-staking/
 COPY crates/windexer-network/Cargo.toml ./crates/windexer-network/
 COPY crates/windexer-store/Cargo.toml ./crates/windexer-store/
 COPY crates/windexer-examples/Cargo.toml ./crates/windexer-examples/
+COPY crates/windexer-geyser/build.rs ./crates/windexer-geyser/
 
 # Create dummy source files for workspace members
 RUN mkdir -p crates/windexer-api/src \
@@ -44,7 +45,7 @@ RUN cargo build --package windexer-geyser
 # Copy the actual source code
 COPY crates ./crates
 COPY scripts ./scripts
-COPY config ./config
+COPY deployment/docker/config/geyser ./config/geyser
 
 # Build the Geyser plugin
 RUN cargo build --release --package windexer-geyser
@@ -62,7 +63,7 @@ WORKDIR /app
 
 # Copy the build artifacts from the builder stage
 COPY --from=builder /app/target/release/libwindexer_geyser.so /app/
-COPY --from=builder /app/scripts/setup-geyser.sh /app/
+COPY --from=builder /app/scripts/setup-windexer-geyser.sh /app/
 COPY --from=builder /app/config/geyser /app/config/geyser/
 
 # Create data directory

@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   solana-validator:
-    image: solanalabs/solana:v2.2
+    image: anzaxyz/agave:v2.2.0
+    platform: linux/amd64
     container_name: solana-validator
     volumes:
       - ./data/validator:/data
@@ -110,10 +109,12 @@ services:
       - node-2
 
   data-generator:
+    platform: linux/amd64
     build:
       context: ../..
       dockerfile: deployment/docker/Dockerfile.node
     container_name: windexer-data-generator
+
     environment:
       - RUST_LOG=info
     command: >
