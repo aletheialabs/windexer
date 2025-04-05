@@ -13,7 +13,6 @@ test-data/
 test-ledger/
 
 temp/
-scripts/test-scripts/
 config/
 
 .ledger/
