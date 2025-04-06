@@ -29,7 +29,7 @@ echo -e "${YELLOW}Waiting for network to initialize...${NC}"
 sleep 2
 
 # Check validator
-check_network "http://localhost:8899/health" "Solana Validator" || {
+check_network "http://localhost:8999/health" "Solana Validator" || {
   echo -e "${RED}Error: Validator is not running. Start it with 'make run-validator-with-geyser'${NC}"
   exit 1
 }
@@ -39,25 +39,27 @@ echo -e "\n${YELLOW}Generating test transactions...${NC}"
 ./scripts/test-scripts/generate-data.sh
 
 # Check node status
-echo -e "\n${YELLOW}Network Stats:${NC}"
+echo -e "\n${YELLOW}Network Nodes:${NC}"
 
-# Try to get node status
-check_network "http://localhost:9000/api/status" "Node 0"
-check_network "http://localhost:9001/api/status" "Node 1"
+# Try to get node status for the p2p nodes on base port 9000
+for i in 0 1 2 3; do
+  port=$((9000 + i))
+  check_network "http://localhost:$port/api/status" "Node $i (port $port)" || break
+done
 
-# Check indexer status
-echo -e "\n${YELLOW}Indexer Stats:${NC}"
-check_network "http://localhost:10001/api/status" "Indexer 1"
-check_network "http://localhost:10101/api/status" "Indexer 2"
-
-# Show recent transactions (if any)
+# Show recent transactions from any available node
 echo -e "\n${YELLOW}Recent Transactions:${NC}"
-curl -s http://localhost:10001/api/transactions || echo -e "${RED}  No transactions available${NC}"
+for i in 0 1 2 3; do
+  port=$((9000 + i))
+  transactions=$(curl -s http://localhost:$port/api/transactions 2>/dev/null)
+  if [ -n "$transactions" ] && [ "$transactions" != "null" ]; then
+    echo -e "${GREEN}Found transactions from Node $i:${NC}"
+    echo $transactions | jq '.' 2>/dev/null || echo $transactions
+    break
+  fi
+done
 
 echo -e "\n${GREEN}Demo complete! The network is running and ready for interaction.${NC}"
-echo -e "You can use these endpoints for further interaction:"
-echo -e "  - Node 0 API: http://localhost:9000"
-echo -e "  - Node 1 API: http://localhost:9001"
-echo -e "  - Indexer 1 API: http://localhost:10001"
-echo -e "  - Indexer 2 API: http://localhost:10101"
-echo -e "  - Validator RPC: http://localhost:8899"
+echo -e "You can use these base endpoints for further interaction:"
+echo -e "  - P2P Nodes: http://localhost:9000, http://localhost:9001, etc."
+echo -e "  - Validator RPC: http://localhost:8999"

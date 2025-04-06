@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 VALIDATOR_HOST="localhost"
-VALIDATOR_PORT=8899
+VALIDATOR_PORT=8999
 NUM_TRANSACTIONS=20
 KEYPAIR_PATH="$HOME/.config/solana/id.json"
 
