@@ -27,9 +27,9 @@ cd "$TS_DIR" || exit 1
 
 # Check if the validator is running
 echo -e "${YELLOW}Checking if Solana validator is running...${NC}"
-solana validators --url http://localhost:8999 &>/dev/null
+solana validators --url http://localhost:8899 &>/dev/null
 if [ $? -ne 0 ]; then
-  echo -e "${RED}❌ Solana validator does not seem to be running on port 8999${NC}"
+  echo -e "${RED}❌ Solana validator does not seem to be running on port 8899${NC}"
   echo -e "${YELLOW}Please start the validator:${NC}"
   echo -e "    make run-validator-with-geyser"
   exit 1
