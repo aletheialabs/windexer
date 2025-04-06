@@ -17,12 +17,24 @@ KEYPAIR_PATH="$HOME/.config/solana/id.json"
 
 echo -e "${BLUE}=== wIndexer Data Generator ===${NC}"
 
+# Check for required commands
+check_command() {
+  if ! command -v $1 &> /dev/null; then
+    echo -e "${YELLOW}Warning: $1 is not installed. Using alternative methods.${NC}"
+    return 1
+  fi
+  return 0
+}
+
 # Add Solana CLI if not installed
 if ! command -v solana &> /dev/null; then
   echo -e "${YELLOW}Installing Solana CLI...${NC}"
   sh -c "$(curl -sSfL https://release.solana.com/v1.17.0/install)"
   export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 fi
+
+# Check if bc is available
+HAS_BC=$(check_command bc; echo $?)
 
 # Functions
 create_keypair_if_needed() {
@@ -53,7 +65,26 @@ airdrop_if_needed() {
   # Try multiple times as faucet might not be ready immediately
   for i in {1..3}; do
     balance=$(solana --url http://$VALIDATOR_HOST:$VALIDATOR_PORT balance 2>/dev/null || echo "0")
-    if (( $(echo "$balance < 1.0" | bc -l) )); then
+    
+    if [ "$HAS_BC" -eq 0 ]; then
+      need_airdrop=$(echo "$balance < 1.0" | bc -l)
+    else
+      # Alternative check without bc
+      if [[ "$balance" == "0" || "$balance" == "0 SOL" ]]; then
+        need_airdrop=1
+      else
+        # Extract the numeric part before "SOL" and compare
+        balance_num=${balance%% SOL}
+        # Simple check if it starts with "0." or is "0"
+        if [[ "$balance_num" == "0"* && "$balance_num" != "0."[1-9]* ]]; then
+          need_airdrop=1
+        else
+          need_airdrop=0
+        fi
+      fi
+    fi
+    
+    if [ "$need_airdrop" == "1" ]; then
       echo -e "${YELLOW}Requesting airdrop of 2 SOL (attempt $i/3)...${NC}"
       if solana --url http://$VALIDATOR_HOST:$VALIDATOR_PORT airdrop 2 &>/dev/null; then
         echo -e "${GREEN}Airdrop successful!${NC}"
@@ -61,7 +92,7 @@ airdrop_if_needed() {
       fi
       sleep 2
     else
-      echo -e "${GREEN}Current balance: $balance SOL${NC}"
+      echo -e "${GREEN}Current balance: $balance${NC}"
       return 0
     fi
   done
@@ -77,7 +108,14 @@ generate_transactions() {
 
   successful=0
   for i in $(seq 1 $NUM_TRANSACTIONS); do
-    amount=$(echo "scale=4; $RANDOM/1000000" | bc)
+    # Calculate a random small amount
+    if [ "$HAS_BC" -eq 0 ]; then
+      amount=$(echo "scale=4; $RANDOM/1000000" | bc)
+    else
+      # Alternative calculation without bc (smaller amounts)
+      amount="0.000$(( RANDOM % 1000 + 1 ))"
+    fi
+    
     echo -e "${YELLOW}[$i/$NUM_TRANSACTIONS] Sending $amount SOL to $recipient${NC}"
 
     tx_sig=$(solana --url http://$VALIDATOR_HOST:$VALIDATOR_PORT transfer --allow-unfunded-recipient \
