@@ -21,7 +21,7 @@ AVS_WALLET_FILE := $(AVS_DEMO_DIR)/configs/avs-wallet.json # Default location fo
 	clean-init kill-validator run-validator-clean check-solana-devnet \
 	cambrian-demo-setup cambrian-demo-start cambrian-demo-stop \
 	cambrian-demo-status cambrian-demo-proposal cambrian-demo-proposal-% \
-	cambrian-demo-clean cambrian-demo help
+	cambrian-demo-clean cambrian-demo help run-ts-examples
 
 # Default target
 all: help
@@ -30,6 +30,11 @@ all: help
 build:
 	@echo "Building workspace..."
 	@$(CARGO) build --workspace
+
+# --- Examples ---
+run-ts-examples:
+	@echo "Running TypeScript examples..."
+	@$(SCRIPTS_DIR)/run-ts-examples.sh
 
 # --- Local Network ---
 # Runs a single node with a specific index
@@ -268,6 +273,9 @@ help:
 	@echo "  kill-validator                Stop the solana-test-validator process"
 	@echo "  run-geyser                    Run the Geyser setup script"
 	@echo "  clean-geyser                  Clean Geyser setup files"
+	@echo ""
+	@echo "Examples:"
+	@echo "  run-ts-examples               Run TypeScript examples"
 	@echo ""
 	@echo "AVS Initialization (using camb):"
 	@echo "  init-avs                      Initialize AVS using Solana Devnet (default)"
