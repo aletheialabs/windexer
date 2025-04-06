@@ -17,13 +17,10 @@ KEYPAIR_PATH="$HOME/.config/solana/id.json"
 
 echo -e "${BLUE}=== wIndexer Data Generator ===${NC}"
 
-# Check for required commands
+# Check for required commands (returns 0 if found, 1 if not found)
 check_command() {
-  if ! command -v $1 &> /dev/null; then
-    echo -e "${YELLOW}Warning: $1 is not installed. Using alternative methods.${NC}"
-    return 1
-  fi
-  return 0
+  command -v $1 &> /dev/null
+  return $?
 }
 
 # Add Solana CLI if not installed
@@ -33,8 +30,12 @@ if ! command -v solana &> /dev/null; then
   export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 fi
 
-# Check if bc is available
-HAS_BC=$(check_command bc; echo $?)
+# Check if bc is available - do this silently
+check_command bc
+HAS_BC=$?
+if [ $HAS_BC -ne 0 ]; then
+  echo -e "${YELLOW}Warning: bc is not installed. Using alternative methods.${NC}"
+fi
 
 # Functions
 create_keypair_if_needed() {
@@ -66,7 +67,7 @@ airdrop_if_needed() {
   for i in {1..3}; do
     balance=$(solana --url http://$VALIDATOR_HOST:$VALIDATOR_PORT balance 2>/dev/null || echo "0")
     
-    if [ "$HAS_BC" -eq 0 ]; then
+    if [ $HAS_BC -eq 0 ]; then
       need_airdrop=$(echo "$balance < 1.0" | bc -l)
     else
       # Alternative check without bc
@@ -109,7 +110,7 @@ generate_transactions() {
   successful=0
   for i in $(seq 1 $NUM_TRANSACTIONS); do
     # Calculate a random small amount
-    if [ "$HAS_BC" -eq 0 ]; then
+    if [ $HAS_BC -eq 0 ]; then
       amount=$(echo "scale=4; $RANDOM/1000000" | bc)
     else
       # Alternative calculation without bc (smaller amounts)
