@@ -17,13 +17,13 @@ cat > config/geyser/windexer-geyser-config.json << EOF
   "keypair": "./plugin-keypair.json",
   "host": "127.0.0.1",
   "no_processors": true,
-  "network": {
+  "network": { 
     "node_id": "windexer-node",
     "listen_addr": "127.0.0.1:8900",
     "rpc_addr": "127.0.0.1:8901",
     "bootstrap_peers": [],
     "data_dir": "./windexer_geyser_setup",
-    "solana_rpc_url": "http://127.0.0.1:8899"
+    "solana_rpc_url": "http://127.0.0.1:8999"
   },
   "accounts_selector": {
     "accounts": []

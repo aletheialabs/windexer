@@ -23,7 +23,7 @@ cat > config/geyser/windexer-geyser-config.json << EOL
     "rpc_addr": "127.0.0.1:9877",
     "bootstrap_peers": ["127.0.0.1:9000", "127.0.0.1:9001"],
     "data_dir": "./data/geyser",
-    "solana_rpc_url": "http://localhost:8899"
+    "solana_rpc_url": "http://localhost:8999"
   },
   "accounts_selector": {
     "accounts": null,
