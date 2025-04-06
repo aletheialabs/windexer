@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   solana-validator:
-    image: solanalabs/solana:v2.2.0
+    image: anzaxyz/agave:v2.2.0
+    platform: linux/amd64
     container_name: solana-validator
     volumes:
       - ../../data/validator:/data
@@ -145,43 +144,16 @@ services:
       - POSTGRES_PASSWORD=windexer
       - POSTGRES_DB=windexer
     ports:
-      - "5432:5432"
+      - "5436:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - windexer-network
     restart: unless-stopped
 
-  # AVS Service based on Makefile
-  camb-avs:
-    image: node:18
-    container_name: cambrian-avs
-    working_dir: /app
-    volumes:
-      - ../../avs-demo:/app
-      - ../../avs-demo/configs/avs-wallet.json:/app/avs-wallet.json
-    environment:
-      - SOLANA_RPC_URL=http://solana-validator:8899
-      - SOLANA_WS_URL=ws://solana-validator:8900
-      - CAMBRIAN_POA_NAME=${CAMBRIAN_POA_NAME:-cambrian_local_demo}
-      - AVS_ADMIN_KEY=/app/avs-wallet.json
-      - AVS_HTTP_PORT=3000
-      - AVS_WS_PORT=3001
-      - LOG_LEVEL=info
-    ports:
-      - "3000:3000"
-      - "3001:3001"
-    command: >
-      bash -c "npm install -g @cambrianone/camb-client && 
-              camb start-avs"
-    networks:
-      - windexer-network
-    restart: unless-stopped
-    depends_on:
-      - solana-validator
-
   # Data generator using scripts from Makefile
   data-generator:
+    platform: linux/amd64
     build:
       context: ../..
       dockerfile: deployment/docker/Dockerfile.node
