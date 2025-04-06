@@ -16,3 +16,10 @@ temp/
 config/
 
 .ledger/
+
+*.tfstate
+*.tfstate.backup
+.terraform/
+crash.log
+terraform.tfvars
+*.tfplan

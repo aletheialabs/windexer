@@ -1,10 +1,6 @@
-provider "azurerm" {
-  features {}
-}
-
 resource "azurerm_resource_group" "main" {
   name     = "${var.prefix}-resources"
-  location =  "eastus"
+  location = "eastus"
 }
 
 resource "azurerm_virtual_network" "main" {
@@ -37,9 +33,9 @@ resource "azurerm_linux_virtual_machine" "main" {
   name                            = "${var.prefix}-vm"
   resource_group_name             = azurerm_resource_group.main.name
   location                        = "eastus"
-  size                            = "Standard_D2s_v3"
+  size                            = "Standard_B2s"
   admin_username                  = "adminuser"
-  admin_password                  = "@@12345678"
+  admin_password                  = "@Windexer"
   disable_password_authentication = false
   network_interface_ids = [
     azurerm_network_interface.main.id,
