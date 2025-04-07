@@ -5,19 +5,34 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "windexer-api"
+path = "src/main.rs"
+
 [dependencies]
 windexer-common = { path = "../windexer-common" }
-windexer-store = { path = "../windexer-store" }
+windexer-store = { path = "../windexer-store", optional = true }
 
 # API dependencies
-tonic = "0.12.3"
-prost = "0.13.5"
-tower = "0.5.2"
-axum = "0.8.1"
-tokio-tungstenite = "0.26.2"
+axum = { version = "0.7.4", features = ["macros"] }
+tower = "0.4.13"
+tokio-tungstenite = { version = "0.21.0", optional = true }
+thiserror = "2.0"
+reqwest = { version = "0.11.24", features = ["json"] }
+chrono = "0.4.31"
+dotenv = { version = "0.15.0", optional = true }
+clap = { version = "4.4.18", features = ["derive"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Workspace dependencies
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 anyhow.workspace = true
 serde.workspace = true
 tracing.workspace = true
+serde_json = "1.0"
+
+[features]
+default = []
+store = ["windexer-store"]
+ws = ["tokio-tungstenite"]
+cli = ["clap", "dotenv"]
