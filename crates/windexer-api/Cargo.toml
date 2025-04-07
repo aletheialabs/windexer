@@ -32,7 +32,7 @@ tracing.workspace = true
 serde_json = "1.0"
 
 [features]
-default = []
+default = ["store"]
 store = ["windexer-store"]
 ws = ["tokio-tungstenite"]
 cli = ["clap", "dotenv"]
