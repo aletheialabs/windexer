@@ -8,35 +8,37 @@ x-environment: &default-env
 
 services:
   solana-validator:
-    image: anzaxyz/agave:v2.2.0
+    image: validator-image
     platform: linux/amd64
     container_name: solana-validator
     volumes:
-      - ../../data/validator:/data
-      - ../../config/geyser:/config/geyser
-      - geyser-plugin:/app
+      - ./config/validator:/root/.config/solana/cli
+      - ./config/geyser:/root/config/geyser
+      - ./data/solana:/root/data/solana
+      - geyser-plugin:/root/plugins
     ports:
-      - "${RPC_PORT}:8999"
-      - "${WS_PORT}:8900"
-      - "${FAUCET_PORT}:9910"
+      - "${RPC_PORT:-8899}:8899"
+      - "${WS_PORT:-8900}:8900"
+      - "${FAUCET_PORT:-9900}:9900"
     environment:
-      - RUST_LOG=${RUST_LOG:-info}
-    command: >
-      solana-test-validator
-      --rpc-port 8999
-      --geyser-plugin-config /config/geyser/windexer-geyser-config.json
-      --reset
-      --faucet-port 9910
-      --bind-address 0.0.0.0
-      --no-bpf-jit
+      - NODE_LOG_LEVEL=${LOG_LEVEL:-info}
+    command: [
+      "solana-test-validator",
+      "--ledger", "/root/data/solana",
+      "--faucet-sol", "200000000",
+      "--limit-ledger-size", "50000000",
+      "--geyser-plugin-config", "/root/config/geyser/plugin-config.json",
+      "--rpc-port", "8899",
+      "--quiet"
+    ]
     depends_on:
-      - geyser-plugin
+      geyser-plugin:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8999"]
+      test: ["CMD-SHELL", "nc -z localhost 8899 || exit 1"]
       interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - windexer-network
 

@@ -1,0 +1,7 @@
+FROM anzaxyz/agave:v2.2.0
+
+# Install necessary tools for healthcheck
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends netcat-openbsd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*

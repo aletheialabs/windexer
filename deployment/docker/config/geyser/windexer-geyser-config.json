@@ -1,23 +1,27 @@
 {
   "libpath": "/app/libwindexer_geyser.so",
+  "keypair": "/app/config/geyser/plugin-keypair.json",
+  "host": "0.0.0.0",
+  "no_processors": true,
   "network": {
-    "node_id": "geyser-plugin",
-    "listen_addr": "0.0.0.0:9876", 
-    "rpc_addr": "0.0.0.0:9877",
-    "bootstrap_peers": ["node-1:9000", "node-2:9000"],
+    "node_id": "windexer-node",
+    "listen_addr": "0.0.0.0:8900",
+    "rpc_addr": "0.0.0.0:8901",
+    "bootstrap_peers": [],
     "data_dir": "/app/data/geyser",
-    "solana_rpc_url": "http://solana-validator:8899"
+    "solana_rpc_url": "http://solana-validator:8999"
   },
   "accounts_selector": {
-    "accounts": ["*"],
-    "owners": null
+    "accounts": []
   },
   "transaction_selector": {
-    "mentions": ["*"],
-    "include_votes": false
+    "mentions": []
   },
-  "thread_count": 4,
+  "thread_count": 1,
   "batch_size": 100,
-  "use_mmap": true,
-  "panic_on_error": false
+  "panic_on_error": false,
+  "use_mmap": false,
+  "metrics": {
+    "enabled": false
+  }
 } 
