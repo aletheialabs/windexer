@@ -16,21 +16,24 @@ RUN apt-get update && \
 # Copy Cargo.toml files to cache dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY crates/windexer-api/Cargo.toml ./crates/windexer-api/
+COPY crates/windexer-common/Cargo.toml ./crates/windexer-common/
 
-# Create dummy main.rs to build dependencies
-RUN mkdir -p crates/windexer-api/src && \
+# Create dummy source files for dependencies to build
+RUN mkdir -p crates/windexer-api/src crates/windexer-common/src && \
     echo "fn main() {}" > crates/windexer-api/src/main.rs && \
     echo "pub fn dummy() {}" > crates/windexer-api/src/lib.rs && \
+    echo "pub fn dummy() {}" > crates/windexer-common/src/lib.rs && \
     cargo build --release --bin windexer-api && \
-    rm -rf crates/windexer-api/src
+    rm -rf crates/windexer-api/src crates/windexer-common/src
 
 # Copy actual source code
 COPY crates/windexer-api/src ./crates/windexer-api/src
-COPY crates/windexer-common ./crates/windexer-common
+COPY crates/windexer-common/src ./crates/windexer-common/src
+COPY crates/windexer-common/Cargo.toml ./crates/windexer-common/
 
 # Build the application
 ARG CARGO_BUILD_ARGS
-RUN cargo build ${CARGO_BUILD_ARGS} --bin windexer-api && \
+RUN cargo build ${CARGO_BUILD_ARGS:-"--release"} --bin windexer-api && \
     mv target/release/windexer-api /usr/local/bin/
 
 # Production stage
