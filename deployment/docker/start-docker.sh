@@ -9,6 +9,7 @@ export RPC_PORT=${RPC_PORT:-8999}
 export WS_PORT=${WS_PORT:-8900}
 export FAUCET_PORT=${FAUCET_PORT:-9910}
 export INDEXER_BASE_PORT=${INDEXER_BASE_PORT:-10000}
+export API_PORT=${API_PORT:-3000}
 export RUST_LOG=${RUST_LOG:-info}
 
 # Calculate BASE_PORT_PLUS_ONE
@@ -34,6 +35,7 @@ echo -e "  Validator RPC port: ${RPC_PORT}"
 echo -e "  Validator WebSocket port: ${WS_PORT}"
 echo -e "  Validator Faucet port: ${FAUCET_PORT}"
 echo -e "  Indexer base port: ${INDEXER_BASE_PORT}"
+echo -e "  API port: ${API_PORT}"
 echo -e "  Log level: ${RUST_LOG}"
 
 # Generate docker-compose.override.yml

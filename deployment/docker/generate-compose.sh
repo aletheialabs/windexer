@@ -96,5 +96,13 @@ for i in $(seq 1 $INDEXERS); do
 EOL
 done
 
+# Add API port to the env list
+echo "  RPC_PORT=${RPC_PORT:-8899}"
+echo "  WS_PORT=${WS_PORT:-8900}"
+echo "  FAUCET_PORT=${FAUCET_PORT:-9900}"
+echo "  BASE_PORT=${BASE_PORT:-9000}"
+echo "  INDEXER_BASE_PORT=${INDEXER_BASE_PORT:-10000}"
+echo "  API_PORT=${API_PORT:-3000}"
+
 echo "Generated $OUTPUT_FILE with $NODES nodes and $INDEXERS indexers"
 echo "Use with: docker-compose -f docker-compose.yml -f $OUTPUT_FILE up -d" 

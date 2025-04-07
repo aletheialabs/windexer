@@ -49,7 +49,7 @@ COPY scripts ./scripts
 COPY examples ./examples
 
 # Build the node and indexer binaries
-RUN cargo build --release --bin node --bin indexer
+RUN cargo build --release --bin node --bin indexer --bin windexer-api
 
 # Runtime stage - Node.js for TypeScript examples + Rust binaries
 FROM node:20-slim
@@ -70,6 +70,7 @@ WORKDIR /app
 # Copy the build artifacts from the builder stage
 COPY --from=builder /app/target/release/node /app/
 COPY --from=builder /app/target/release/indexer /app/
+COPY --from=builder /app/target/release/windexer-api /app/
 COPY --from=builder /app/scripts /app/scripts/
 COPY --from=builder /app/examples /app/examples/
 
