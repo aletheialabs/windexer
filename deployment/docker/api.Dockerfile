@@ -13,30 +13,16 @@ RUN apt-get update && \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Cargo.toml files to cache dependencies
+# Copy workspace files
 COPY Cargo.toml Cargo.lock ./
-COPY crates/windexer-api/Cargo.toml ./crates/windexer-api/
-COPY crates/windexer-common/Cargo.toml ./crates/windexer-common/
-COPY crates/windexer-store/Cargo.toml ./crates/windexer-store/
+COPY crates/windexer-api ./crates/windexer-api
+COPY crates/windexer-common ./crates/windexer-common
+COPY crates/windexer-store ./crates/windexer-store
 
-# Create dummy source files for dependencies to build
-RUN mkdir -p crates/windexer-api/src crates/windexer-common/src crates/windexer-store/src && \
-    echo "fn main() {}" > crates/windexer-api/src/main.rs && \
-    echo "pub fn dummy() {}" > crates/windexer-api/src/lib.rs && \
-    echo "pub fn dummy() {}" > crates/windexer-common/src/lib.rs && \
-    echo "pub fn dummy() {}" > crates/windexer-store/src/lib.rs && \
+# Build the application with minimal dependencies
+RUN cd crates/windexer-api && \
     cargo build --release --bin windexer-api --no-default-features && \
-    rm -rf crates/windexer-api/src crates/windexer-common/src crates/windexer-store/src
-
-# Copy actual source code
-COPY crates/windexer-api/src ./crates/windexer-api/src
-COPY crates/windexer-common/src ./crates/windexer-common/src
-COPY crates/windexer-store/src ./crates/windexer-store/src
-
-# Build the application
-ARG CARGO_BUILD_ARGS
-RUN cargo build ${CARGO_BUILD_ARGS:-"--release"} --bin windexer-api --no-default-features && \
-    mv target/release/windexer-api /usr/local/bin/
+    mv ../../target/release/windexer-api /usr/local/bin/
 
 # Production stage
 FROM debian:bookworm-slim
@@ -51,6 +37,9 @@ RUN apt-get update && \
 
 # Copy the binary from the builder stage
 COPY --from=builder /usr/local/bin/windexer-api /usr/local/bin/
+
+# Set the working directory
+WORKDIR /app
 
 # Set the entrypoint
 ENTRYPOINT ["windexer-api"]
