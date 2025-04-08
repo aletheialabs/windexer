@@ -4,7 +4,7 @@
 PROJECT         := windexer
 CARGO           := cargo
 NODES           := 3
-BASE_PORT       := 9000
+BASE_PORT       := 9001
 RPC_PORT_OFFSET := 1000
 DATA_DIR        := ./data
 AVS_DEMO_DIR    := ./avs-demo
@@ -21,7 +21,8 @@ AVS_WALLET_FILE := $(AVS_DEMO_DIR)/configs/avs-wallet.json # Default location fo
 	clean-init kill-validator run-validator-clean check-solana-devnet \
 	cambrian-demo-setup cambrian-demo-start cambrian-demo-stop \
 	cambrian-demo-status cambrian-demo-proposal cambrian-demo-proposal-% \
-	cambrian-demo-clean cambrian-demo help run-ts-examples
+	cambrian-demo-clean cambrian-demo help run-ts-examples \
+	run-indexer-%
 
 # Default target
 all: help
@@ -307,3 +308,9 @@ help:
 
 # Note: The previous help:: target was removed in favor of the comprehensive help target above.
 # If you need specific help sections, they can be added back using the :: syntax if desired.
+
+run-indexer-%: build
+	@echo "Running indexer $*..."
+	@$(CARGO) run --bin indexer -- \
+		--index $* \
+		--base-port $(BASE_PORT)

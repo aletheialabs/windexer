@@ -1,62 +1,34 @@
 use {
-    anyhow::{anyhow, Result},
+    anyhow::Result,
     clap::Parser,
     solana_sdk::{
-        signer::keypair::Keypair,
         pubkey::Pubkey,
-        signature::Signature,
+        signature::Keypair,
     },
     std::{
-        collections::HashMap,
         path::PathBuf,
-        sync::{Arc, Mutex, RwLock},
-        time::{Duration, Instant, SystemTime},
+        sync::{Arc, Mutex},
+        time::{Duration, Instant},
     },
     tokio::{
-        sync::mpsc,
         time::interval,
     },
-    tracing::{error, info, warn, debug},
+    tracing::{error, info},
     tracing_subscriber::{EnvFilter, fmt::format::FmtSpan},
     windexer_common::{
         config::NodeConfig,
         crypto::SerializableKeypair,
-        types::{
-            account::AccountData,
-            block::BlockData,
-            transaction::TransactionData,
-        },
-        utils::slot_status::SlotStatus,
     },
-    windexer_network::{
-        Node,
-        gossip::{GossipMessage, MessageType},
-    },
+    windexer_network::Node,
     windexer_store::{
         Store,
         StoreConfig,
     },
+    windexer_metrics::metrics::metrics::*,
 };
 
-use tokio::net::TcpListener;
 use warp::Filter;
 use serde_json::json;
-
-#[derive(Default, Clone)]
-struct MockTransactionMeta;
-
-#[derive(Default, Clone)]
-struct MockTransactionStatusMeta {
-    status: Option<()>,
-    fee: u64,
-    pre_balances: Vec<u64>,
-    post_balances: Vec<u64>,
-    inner_instructions: Option<Vec<()>>,
-    log_messages: Option<Vec<String>>,
-    pre_token_balances: Option<Vec<()>>,
-    post_token_balances: Option<Vec<()>>,
-    rewards: Option<Vec<()>>,
-}
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -74,7 +46,7 @@ struct Args {
     #[clap(long, value_delimiter = ',')]
     bootstrap_peers: Vec<String>,
 
-    #[clap(long, default_value = "http://localhost:8899")]
+    #[clap(long, default_value = "http://localhost:8999")]
     solana_rpc: String,
     
     #[clap(long, default_value = "./data")]
@@ -254,10 +226,6 @@ async fn main() -> Result<()> {
     let api_port = 10000 + args.index;
     start_api_server(store.clone(), api_port).await?;
     
-    let (account_tx, account_rx) = mpsc::channel::<AccountData>(1000);
-    let (tx_tx, tx_rx) = mpsc::channel::<TransactionData>(1000);
-    let (block_tx, block_rx) = mpsc::channel::<BlockData>(1000);
-    
     let metrics = Arc::new(Mutex::new(IndexingMetrics::default()));
     
     let metrics_clone = metrics.clone();
@@ -272,39 +240,7 @@ async fn main() -> Result<()> {
             m.log_metrics();
         }
     });
-    
-    if index_accounts {
-        register_account_handler(
-            &node, 
-            store.clone(), 
-            account_tx.clone(), 
-            metrics.clone()
-        ).await?;
-        
-        process_accounts(store.clone(), account_rx, metrics.clone()).await?;
-    }
-    
-    if index_transactions {
-        register_transaction_handler(
-            &node, 
-            store.clone(), 
-            tx_tx.clone(), 
-            metrics.clone()
-        ).await?;
-        
-        process_transactions(store.clone(), tx_rx, metrics.clone()).await?;
-    }
-    
-    if index_blocks {
-        register_block_handler(
-            &node, 
-            store.clone(), 
-            block_tx.clone(), 
-            metrics.clone()
-        ).await?;
-        
-        process_blocks(store.clone(), block_rx, metrics.clone()).await?;
-    }
+
     
     let node_handle = tokio::spawn(async move {
         if let Err(e) = node.start().await {
@@ -319,187 +255,5 @@ async fn main() -> Result<()> {
     let _ = tokio::time::timeout(Duration::from_secs(5), node_handle).await;
     
     info!("✅ Indexer shutdown complete");
-    Ok(())
-}
-
-async fn register_account_handler(
-    node: &Node,
-    _store: Arc<Store>,
-    account_tx: mpsc::Sender<AccountData>,
-    _metrics: Arc<Mutex<IndexingMetrics>>,
-) -> Result<()> {
-    info!("Registering account handler");
-    
-    // Subscribe to account updates
-    // In a real implementation, we would use the Node's API to subscribe to specific topics
-    // And forward messages to the channel
-    
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(5));
-        loop {
-            interval.tick().await;
-            
-            let account = AccountData {
-                pubkey: Pubkey::new_unique(),
-                lamports: 1000,
-                owner: Pubkey::new_unique(),
-                executable: false,
-                rent_epoch: 0,
-                data: vec![1, 2, 3],
-                write_version: 0,
-                slot: 0,
-                is_startup: false,
-                transaction_signature: None,
-            };
-            
-            if let Err(e) = account_tx.send(account).await {
-                error!("Failed to send account update: {}", e);
-            }
-        }
-    });
-    
-    Ok(())
-}
-
-async fn register_transaction_handler(
-    _node: &Node,
-    _store: Arc<Store>,
-    _tx_tx: mpsc::Sender<TransactionData>,
-    metrics: Arc<Mutex<IndexingMetrics>>,
-) -> Result<()> {
-    info!("Registering transaction handler");
-    
-    // Instead of trying to create mock transactions with problematic types,
-    // we'll just simulate transaction processing and update metrics directly
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(7));
-        let mut slot = 0;
-        
-        loop {
-            interval.tick().await;
-            slot += 1;
-            
-            let mut m = metrics.lock().unwrap();
-            m.transactions_processed += 10;
-            m.last_processed_slot = slot;
-            
-            debug!("Simulated processing of 10 transactions at slot {}", slot);
-        }
-    });
-    
-    Ok(())
-}
-
-async fn register_block_handler(
-    _node: &Node,
-    _store: Arc<Store>,
-    block_tx: mpsc::Sender<BlockData>,
-    _metrics: Arc<Mutex<IndexingMetrics>>,
-) -> Result<()> {
-    info!("Registering block handler");
-    
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(10));
-        let mut slot = 0;
-        
-        loop {
-            interval.tick().await;
-            slot += 1;
-            
-            let timestamp = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
-            
-            let block = BlockData {
-                slot,
-                parent_blockhash: if slot > 0 { Some(format!("dummy-parent-hash-{}", slot - 1)) } else { None },
-                timestamp: Some(timestamp),
-                transaction_count: Some(10),
-                entry_count: 5, // This is a u64, not an Option<u64>
-                entries: vec![],
-                blockhash: Some(format!("dummy-hash-{}", slot)),
-                rewards: Some(Vec::new()),
-                block_height: Some(slot),
-                parent_slot: if slot > 0 { Some(slot - 1) } else { None },
-                status: SlotStatus::Processed, // Using the imported enum
-            };
-            
-            if let Err(e) = block_tx.send(block).await {
-                error!("Failed to send block update: {}", e);
-            }
-        }
-    });
-    
-    Ok(())
-}
-
-async fn process_accounts(
-    store: Arc<Store>,
-    mut rx: mpsc::Receiver<AccountData>,
-    metrics: Arc<Mutex<IndexingMetrics>>,
-) -> Result<()> {
-    info!("Starting account processor");
-    
-    tokio::spawn(async move {
-        while let Some(account) = rx.recv().await {
-            debug!("Processing account: {}", account.pubkey);
-            
-            if let Err(e) = store.store_account(account.clone()) {
-                error!("Failed to store account: {}", e);
-            } else {
-                let mut m = metrics.lock().unwrap();
-                m.accounts_processed += 1;
-                m.last_processed_slot = account.slot;
-            }
-        }
-    });
-    
-    Ok(())
-}
-
-async fn process_transactions(
-    store: Arc<Store>,
-    mut rx: mpsc::Receiver<TransactionData>,
-    metrics: Arc<Mutex<IndexingMetrics>>,
-) -> Result<()> {
-    info!("Starting transaction processor");
-    
-    tokio::spawn(async move {
-        while let Some(tx) = rx.recv().await {
-            debug!("Processing transaction: {}", tx.signature);
-            
-            let mut m = metrics.lock().unwrap();
-            m.transactions_processed += 1;
-            m.last_processed_slot = tx.slot;
-        }
-    });
-    
-    Ok(())
-}
-
-async fn process_blocks(
-    store: Arc<Store>,
-    mut rx: mpsc::Receiver<BlockData>,
-    metrics: Arc<Mutex<IndexingMetrics>>,
-) -> Result<()> {
-    info!("Starting block processor");
-    
-    tokio::spawn(async move {
-        while let Some(block) = rx.recv().await {
-            info!("Processing block: {} (slot {})", 
-                block.blockhash.as_deref().unwrap_or("unknown"), 
-                block.slot);
-            
-            if let Err(e) = store.store_block(block.clone()) {
-                error!("Failed to store block: {}", e);
-            } else {
-                let mut m = metrics.lock().unwrap();
-                m.blocks_processed += 1;
-                m.last_processed_slot = block.slot;
-            }
-        }
-    });
-    
     Ok(())
 } 

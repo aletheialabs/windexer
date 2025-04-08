@@ -39,7 +39,7 @@ struct Args {
     #[clap(long, value_delimiter = ',')]
     bootstrap_peers: Vec<String>,
 
-    #[clap(long, default_value = "http://localhost:8899")]
+    #[clap(long, default_value = "http://localhost:8999")]
     solana_rpc: String,
 }
 

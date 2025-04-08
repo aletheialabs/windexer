@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const WINDEXER_URL = 'http://localhost:9000';
+// The port for the API server is 10000 + index (where index is 0 for the first node)
+const WINDEXER_URL = 'http://localhost:10000';
 
 async function main() {
   console.log('=== Querying wIndexer API ===');
@@ -44,7 +45,7 @@ async function main() {
       }
       
     } catch (error) {
-      console.error('\n❌ Error connecting to wIndexer service on port 9000');
+      console.error('\n❌ Error connecting to wIndexer service');
       console.error('\nPlease make sure the following services are running:');
       console.error('  1. Solana validator with Geyser plugin (make run-validator-with-geyser)');
       console.error('  2. wIndexer node (make run-node-0)');
