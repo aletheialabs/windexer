@@ -44,7 +44,7 @@ services:
       - ../../data/node_1:/app/data/node_1
     ports:
       - "9100:9000"
-      - "9101:9001"
+      - "9101:10001"
     command: node --index 1 --base-port 9000 --enable-tip-route --bootstrap-peers node-0:9000
     deploy:
       replicas: 1
@@ -59,7 +59,7 @@ services:
       - ../../data/node_2:/app/data/node_2
     ports:
       - "9200:9000"
-      - "9201:9001"
+      - "9201:10001"
     command: node --index 2 --base-port 9000 --enable-tip-route --bootstrap-peers node-0:9000
     deploy:
       replicas: 1
@@ -73,8 +73,8 @@ services:
     volumes:
       - ../../data/indexer_1:/app/data/indexer_1
     ports:
-      - "10001:10001"
-    command: indexer --index 1 --bootstrap-peers node-0:9000 --base-port 10001
+      - "3001:3001"
+    command: indexer --index 1 --bootstrap-peers node-0:9000 --base-port 3001
     deploy:
       replicas: 1
 

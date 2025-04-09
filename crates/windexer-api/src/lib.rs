@@ -12,12 +12,14 @@ pub mod health;
 pub mod metrics;
 pub mod endpoints;
 pub mod rest;
+pub mod solana_client;
 
 // Re-exports 
 pub use types::{ApiResponse, ApiError, StatusResponse, HealthResponse, HealthStatus, HealthCheckResult, NodeInfo};
 pub use health::HealthService;
 pub use metrics::MetricsService;
 pub use rest::AppState;
+pub use solana_client::{SolanaClient, SolanaCluster};
 
 /// API server configuration
 #[derive(Debug, Clone)]
@@ -26,6 +28,8 @@ pub struct ApiConfig {
     pub bind_addr: SocketAddr,
     /// Log level (default: info)
     pub log_level: String,
+    /// Solana cluster to connect to (default: Localnet)
+    pub solana_cluster: SolanaCluster,
 }
 
 impl Default for ApiConfig {
@@ -33,6 +37,7 @@ impl Default for ApiConfig {
         Self {
             bind_addr: "127.0.0.1:3000".parse().expect("Valid default bind address"),
             log_level: "info".to_string(),
+            solana_cluster: SolanaCluster::Localnet,
         }
     }
 }
@@ -57,9 +62,10 @@ impl ApiServer {
             .init();
 
         tracing::info!("Starting wIndexer API server on {}", self.config.bind_addr);
+        tracing::info!("Connecting to Solana cluster: {:?}", self.config.solana_cluster);
         
-        // Create the router
-        let router = rest::create_api_router();
+        // Create the router with Solana client
+        let router = rest::create_api_router(self.config.solana_cluster);
         
         // Start the server
         let listener = tokio::net::TcpListener::bind(self.config.bind_addr).await?;

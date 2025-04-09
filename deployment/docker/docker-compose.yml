@@ -1,7 +1,7 @@
 x-environment: &default-env
   NODES: ${NODES:-3}
   BASE_PORT: ${BASE_PORT:-9000}
-  RPC_PORT: ${RPC_PORT:-8999}
+  RPC_PORT: ${RPC_PORT:-8899}
   WS_PORT: ${WS_PORT:-8900}
   FAUCET_PORT: ${FAUCET_PORT:-9910}
   API_PORT: ${API_PORT:-3000}
@@ -66,10 +66,10 @@ services:
       - ../../data/node_0:/app/data/node_0
     ports:
       - "${BASE_PORT}:9000"
-      - "${BASE_PORT_PLUS_ONE:-9001}:9001"
+      - "${BASE_PORT_PLUS_ONE:-10001}:10001"
     environment:
       - RUST_LOG=${RUST_LOG:-info}
-      - SOLANA_RPC_URL=http://solana-validator:8999
+      - SOLANA_RPC_URL=http://solana-validator:8899
       - SOLANA_WS_URL=ws://solana-validator:8900
     command: node --index 0 --base-port 9000 --enable-tip-route
     networks:
@@ -105,8 +105,8 @@ services:
       - ../../scripts:/app/scripts
     environment:
       - RUST_LOG=${RUST_LOG:-info}
-      - SOLANA_RPC_URL=http://solana-validator:8999
-      - SOLANA_RPC_PORT=8999
+      - SOLANA_RPC_URL=http://solana-validator:8899
+      - SOLANA_RPC_PORT=8899
     command: >
       bash -c "
         sleep 30 &&

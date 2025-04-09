@@ -96,7 +96,7 @@ ENV RUST_LOG=info
 ENV PATH="/app:${PATH}"
 
 # Expose necessary ports (P2P, API)
-EXPOSE 9000-9002 10000-10100 
+EXPOSE 9000-10002 10000-10100 
 
 # Create an entrypoint script
 RUN echo '#!/bin/bash\n\

@@ -29,7 +29,7 @@ echo -e "${YELLOW}Waiting for network to initialize...${NC}"
 sleep 2
 
 # Check validator
-check_network "http://localhost:8999/health" "Solana Validator" || {
+check_network "http://localhost:8899/health" "Solana Validator" || {
   echo -e "${RED}Error: Validator is not running. Start it with 'make run-validator-with-geyser'${NC}"
   exit 1
 }
@@ -61,5 +61,5 @@ done
 
 echo -e "\n${GREEN}Demo complete! The network is running and ready for interaction.${NC}"
 echo -e "You can use these base endpoints for further interaction:"
-echo -e "  - P2P Nodes: http://localhost:9000, http://localhost:9001, etc."
-echo -e "  - Validator RPC: http://localhost:8999"
+echo -e "  - P2P Nodes: http://localhost:9000, http://localhost:10001, etc."
+echo -e "  - Validator RPC: http://localhost:8899"

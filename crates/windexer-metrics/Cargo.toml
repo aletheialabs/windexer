@@ -1,0 +1,25 @@
+[package]
+name = "windexer-metrics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Internal dependencies
+windexer-common = { path = "../windexer-common" }
+
+# Metrics
+prometheus = "0.13"
+
+# Async
+tokio.workspace = true
+
+# Networking
+warp = "0.3"
+
+# Utilities
+anyhow.workspace = true
+tracing.workspace = true
+lazy_static = "1.4"
+once_cell = "1.18" 

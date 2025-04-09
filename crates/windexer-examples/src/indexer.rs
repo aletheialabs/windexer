@@ -8,7 +8,7 @@ use {
     std::{
         path::PathBuf,
         sync::{Arc, Mutex},
-        time::{Duration, Instant},
+        time::{Duration, Instant, SystemTime},
     },
     tokio::{
         time::interval,
@@ -46,7 +46,7 @@ struct Args {
     #[clap(long, value_delimiter = ',')]
     bootstrap_peers: Vec<String>,
 
-    #[clap(long, default_value = "http://localhost:8999")]
+    #[clap(long, default_value = "http://localhost:8899")]
     solana_rpc: String,
     
     #[clap(long, default_value = "./data")]
@@ -118,19 +118,25 @@ async fn start_api_server(store: Arc<Store>, port: u16) -> Result<()> {
     let metrics_route = warp::path("api")
         .and(warp::path("status"))
         .map(move || {
-            warp::reply::json(&json!({
+            info!("Received API status request");
+            let response = warp::reply::json(&json!({
                 "status": "running",
                 "accounts": store_clone.account_count(),
                 "transactions": store_clone.transaction_count(),
                 "blocks": store_clone.block_count(),
-            }))
+                "timestamp": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
+            }));
+            info!("Returning API status response");
+            response
         });
     
     let store_clone = store.clone();
     let accounts_route = warp::path("api")
         .and(warp::path("accounts"))
         .map(move || {
+            info!("Received API accounts request");
             let accounts = store_clone.get_recent_accounts(10);
+            info!("Returning {} accounts", accounts.len());
             warp::reply::json(&accounts)
         });
     
@@ -138,17 +144,40 @@ async fn start_api_server(store: Arc<Store>, port: u16) -> Result<()> {
     let transactions_route = warp::path("api")
         .and(warp::path("transactions"))
         .map(move || {
+            info!("Received API transactions request");
             let txs = store_clone.get_recent_transactions(10);
+            info!("Returning {} transactions", txs.len());
             warp::reply::json(&txs)
+        });
+    
+    // Add a health check route
+    let health_route = warp::path("health")
+        .map(|| {
+            info!("Received health check request");
+            warp::reply::json(&json!({"status": "ok"}))
+        });
+    
+    // Add a root route
+    let root_route = warp::path::end()
+        .map(|| {
+            info!("Received root request");
+            warp::reply::json(&json!({"message": "wIndexer API is running"}))
         });
     
     let routes = metrics_route
         .or(accounts_route)
-        .or(transactions_route);
+        .or(transactions_route)
+        .or(health_route)
+        .or(root_route);
     
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-    info!("Starting API server on {}", addr);
-    tokio::spawn(warp::serve(routes).run(addr));
+    info!("🌐 Starting API server on {}", addr);
+    
+    // Start the server in a separate thread
+    tokio::spawn(async move {
+        info!("API server now listening on {}", addr);
+        warp::serve(routes).run(addr).await;
+    });
     
     Ok(())
 }
@@ -223,7 +252,7 @@ async fn main() -> Result<()> {
     let store = Store::open(store_config)?;
     let store = Arc::new(store);
     
-    let api_port = 10000 + args.index;
+    let api_port = args.base_port;
     start_api_server(store.clone(), api_port).await?;
     
     let metrics = Arc::new(Mutex::new(IndexingMetrics::default()));

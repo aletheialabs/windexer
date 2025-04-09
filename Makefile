@@ -4,13 +4,17 @@
 PROJECT         := windexer
 CARGO           := cargo
 NODES           := 3
-BASE_PORT       := 9001
+BASE_PORT       := 10001
 RPC_PORT_OFFSET := 1000
 DATA_DIR        := ./data
 AVS_DEMO_DIR    := ./avs-demo
 SCRIPTS_DIR     := ./scripts
 GEYSER_CONFIG   := config/geyser/windexer-geyser-config.json
 AVS_WALLET_FILE := $(AVS_DEMO_DIR)/configs/avs-wallet.json # Default location for Cambrian demo wallet
+SOLANA_RPC      := http://localhost:8899
+INDEX_TYPES     := accounts,transactions,blocks
+LOG_LEVEL       := info
+METRICS_INTERVAL := 30
 
 # Phony targets (targets that don't represent files)
 .PHONY: all build run-node-% run-local-network stop-local-network clean \
@@ -22,7 +26,8 @@ AVS_WALLET_FILE := $(AVS_DEMO_DIR)/configs/avs-wallet.json # Default location fo
 	cambrian-demo-setup cambrian-demo-start cambrian-demo-stop \
 	cambrian-demo-status cambrian-demo-proposal cambrian-demo-proposal-% \
 	cambrian-demo-clean cambrian-demo help run-ts-examples \
-	run-indexer-%
+	run-indexer-% run-indexer stop-indexer run-indexer-mainnet \
+	run-test-scenario generate-data run-realtime-indexer run-full-scenario
 
 # Default target
 all: help
@@ -36,6 +41,76 @@ build:
 run-ts-examples:
 	@echo "Running TypeScript examples..."
 	@$(SCRIPTS_DIR)/run-ts-examples.sh
+
+run-test-scenario:
+	@echo "Running complete test scenario..."
+	@echo "1. Stopping any existing processes..."
+	@-$(MAKE) kill-validator
+	@-$(MAKE) stop-indexer
+	@echo "2. Starting validator with Geyser plugin..."
+	@$(MAKE) build-geyser
+	@echo "Starting validator with Geyser config: $(GEYSER_CONFIG)"
+	@cat $(GEYSER_CONFIG)
+	@solana-test-validator \
+		--geyser-plugin-config $(GEYSER_CONFIG) \
+		--reset \
+		--faucet-port 9910 \
+		--rpc-port 8899 \
+		--bind-address 127.0.0.1 & 
+	@echo "Waiting for validator to initialize (5 seconds)..."
+	@sleep 5
+	@echo "3. Starting indexer with unique port..."
+	@TEST_PORT=12001 $(CARGO) run --bin indexer -- \
+		--index 1 \
+		--base-port 12001 \
+		--solana-rpc $(SOLANA_RPC) \
+		--data-dir $(DATA_DIR) \
+		--index-types $(INDEX_TYPES) \
+		--log-level debug \
+		--metrics-interval-seconds $(METRICS_INTERVAL) & 
+	@echo "Waiting for indexer to initialize (15 seconds)..."
+	@sleep 15
+	@echo "4. Verifying validator and indexer connection..."
+	@echo "Checking validator status..."
+	@solana --url $(SOLANA_RPC) cluster-version || (echo "Validator not responding!" && exit 1)
+	@echo "Checking indexer status..."
+	@for i in {1..5}; do \
+		if curl -s http://localhost:12001/api/health > /dev/null; then \
+			echo "Indexer is responding!"; \
+			break; \
+		else \
+			echo "Attempt $$i: Indexer not responding, waiting..."; \
+			if [ $$i -eq 5 ]; then \
+				echo "Indexer failed to start after 5 attempts"; \
+				exit 1; \
+			fi; \
+			sleep 5; \
+		fi; \
+	done
+	@echo "5. Generating test transactions..."
+	@$(SCRIPTS_DIR)/test-scripts/generate-data.sh
+	@echo "6. Verifying transactions on Solana..."
+	@echo "Waiting for transactions to be confirmed (10 seconds)..."
+	@sleep 10
+	@echo "Checking recent transactions..."
+	@echo "Getting payer account from keypair..."
+	@PAYER_ACCOUNT=$$(solana-keygen pubkey ../../examples/typescript/payer-keypair.json) && \
+		echo "Payer account: $$PAYER_ACCOUNT" && \
+		echo "Recent transactions for payer:" && \
+		for sig in $$(solana --url $(SOLANA_RPC) transaction-history $$PAYER_ACCOUNT --limit 5 | grep -o 'Signature: .*' | cut -d' ' -f2); do \
+			echo "Verifying transaction: $$sig" && \
+			solana --url $(SOLANA_RPC) confirm -v $$sig; \
+		done
+	@echo "7. Waiting for indexer to process transactions (30 seconds)..."
+	@sleep 30
+	@echo "8. Verifying indexer is still running..."
+	@curl -s http://localhost:12001/api/health || (echo "Indexer not responding!" && exit 1)
+	@echo "9. Querying data..."
+	@cd examples/typescript && WINDEXER_URL=http://localhost:12001 SOLANA_URL=http://localhost:8899 ts-node query-all-data.ts
+	@echo "Test scenario complete."
+	@echo "NOTE: Validator and indexer are still running. Stop them with:"
+	@echo "  make kill-validator"
+	@echo "  make stop-indexer"
 
 # --- Local Network ---
 # Runs a single node with a specific index
@@ -88,7 +163,7 @@ run-validator-with-geyser: build-geyser
 		--geyser-plugin-config $(GEYSER_CONFIG) \
 		--reset \
 		--faucet-port 9910 \
-		--rpc-port 8999 \
+		--rpc-port 8899 \
 		--bind-address 127.0.0.1
 
 run-geyser:
@@ -101,8 +176,7 @@ clean-geyser:
 
 kill-validator:
 	@echo "Stopping Solana test validator..."
-	@pkill -f 'solana-test-validator' || true
-	@echo "Validator stopped."
+	@-pgrep -f 'solana-test-validator' > /dev/null && pkill -f 'solana-test-validator' && echo "Validator stopped." || echo "No validator running."
 
 run-validator-clean: kill-validator run-validator-with-geyser
 
@@ -125,7 +199,7 @@ init-avs-local:
 	@echo "Using Devnet is recommended (run 'make init-avs-devnet' instead)"
 	@echo ""
 	@echo "If you still want to proceed, when prompted enter:"
-	@echo "  Solana API URL: http://127.0.0.1:8999"
+	@echo "  Solana API URL: http://127.0.0.1:8899"
 	@echo "  Solana WS URL: ws://127.0.0.1:9000"
 	@camb init -t avs $(AVS_DEMO_DIR)
 
@@ -253,6 +327,46 @@ cambrian-demo: cambrian-demo-setup cambrian-demo-start
 	@# Keep running until Ctrl+C - might need a better way if services run detached
 	@tail -f /dev/null
 
+# --- Indexer Commands ---
+run-indexer: build
+	@echo "Running indexer with index 1..."
+	@$(CARGO) run --bin indexer -- \
+		--index 1 \
+		--base-port $(BASE_PORT) \
+		--solana-rpc $(SOLANA_RPC) \
+		--data-dir $(DATA_DIR) \
+		--index-types $(INDEX_TYPES) \
+		--log-level $(LOG_LEVEL) \
+		--metrics-interval-seconds $(METRICS_INTERVAL)
+
+run-indexer-%: build
+	@echo "Running indexer $*..."
+	@$(CARGO) run --bin indexer -- \
+		--index $* \
+		--base-port $(BASE_PORT) \
+		--solana-rpc $(SOLANA_RPC) \
+		--data-dir $(DATA_DIR) \
+		--index-types $(INDEX_TYPES) \
+		--log-level $(LOG_LEVEL) \
+		--metrics-interval-seconds $(METRICS_INTERVAL)
+
+run-indexer-mainnet: build
+	@echo "Running indexer on Solana mainnet..."
+	@$(CARGO) run --bin indexer -- \
+		--index 1 \
+		--base-port 9000 \
+		--bootstrap-peers 127.0.0.1:9000,127.0.0.1:9100 \
+		--solana-rpc https://api.mainnet-beta.solana.com \
+		--data-dir ./my-data \
+		--index-types accounts,transactions \
+		--log-level debug \
+		--metrics-interval-seconds 60
+
+stop-indexer:
+	@echo "Stopping all indexer processes..."
+	@pkill -f '$(CARGO) run --bin indexer' || echo "No indexer processes found."
+	@echo "Indexer processes stopped."
+
 # --- Help ---
 help:
 	@echo "Usage: make [target]"
@@ -267,6 +381,17 @@ help:
 	@echo "  stop-local-network            Stop the local network nodes"
 	@echo "  run-node-<index>              Run a single node (e.g., make run-node-0)"
 	@echo ""
+	@echo "Indexer:"
+	@echo "  run-indexer                   Run indexer with index 1 and default settings"
+	@echo "  run-indexer-<index>           Run indexer with specified index (e.g., make run-indexer-2)"
+	@echo "  run-indexer-mainnet           Run indexer on Solana mainnet with preset configuration"
+	@echo "  stop-indexer                  Stop all running indexer processes"
+	@echo "  SOLANA_RPC=<url>              Override Solana RPC URL (default: $(SOLANA_RPC))"
+	@echo "  DATA_DIR=<path>               Override data directory (default: $(DATA_DIR))"
+	@echo "  INDEX_TYPES=<types>           Override index types (default: $(INDEX_TYPES))"
+	@echo "  LOG_LEVEL=<level>             Override log level (default: $(LOG_LEVEL))"
+	@echo "  METRICS_INTERVAL=<seconds>    Override metrics interval (default: $(METRICS_INTERVAL))"
+	@echo ""
 	@echo "Geyser & Validator:"
 	@echo "  build-geyser                  Build the Geyser plugin"
 	@echo "  run-validator-with-geyser     Start solana-test-validator with the Geyser plugin"
@@ -277,6 +402,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  run-ts-examples               Run TypeScript examples"
+	@echo "  run-test-scenario             Run a complete test scenario"
 	@echo ""
 	@echo "AVS Initialization (using camb):"
 	@echo "  init-avs                      Initialize AVS using Solana Devnet (default)"
@@ -306,11 +432,23 @@ help:
 	@echo "Simple Demo (Original):"
 	@echo "  demo                          Run the original simple start-network/demo-interact scripts"
 
-# Note: The previous help:: target was removed in favor of the comprehensive help target above.
-# If you need specific help sections, they can be added back using the :: syntax if desired.
+# Data generation and indexing targets
+generate-data:
+	@echo "=== Generating test data ==="
+	@chmod +x scripts/test-scripts/generate-data.sh
+	@./scripts/test-scripts/generate-data.sh
 
-run-indexer-%: build
-	@echo "Running indexer $*..."
-	@$(CARGO) run --bin indexer -- \
-		--index $* \
-		--base-port $(BASE_PORT)
+run-realtime-indexer:
+	@echo "=== Starting real-time indexer ==="
+	@bun run examples/typescript/index-realtime-data.ts
+
+run-full-scenario: stop-all run-validator-with-geyser
+	@echo "=== Running full test scenario ==="
+	@sleep 5
+	@echo "Starting indexer..."
+	@make run-indexer
+	@sleep 15
+	@echo "Generating test data..."
+	@make generate-data
+	@echo "Starting real-time indexer..."
+	@make run-realtime-indexer

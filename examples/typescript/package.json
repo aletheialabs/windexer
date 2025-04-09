@@ -9,7 +9,12 @@
     "query-windexer": "ts-node query-windexer.ts",
     "generate-data": "ts-node generate-data.ts",
     "simple-tx": "ts-node simple-tx.ts",
-    "ts-examples": "../../scripts/run-ts-examples.sh"
+    "ts-examples": "../../scripts/run-ts-examples.sh",
+    "query-all-data": "ts-node query-all-data.ts",
+    "query-all-data-interactive": "ts-node query-all-data.ts --interactive",
+    "query-all-data-json": "ts-node query-all-data.ts --json",
+    "query-all-data-pretty": "ts-node query-all-data.ts --pretty-json",
+    "query-realtime-data": "ts-node index-realtime-data.ts"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.0",

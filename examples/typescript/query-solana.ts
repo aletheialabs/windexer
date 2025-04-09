@@ -2,7 +2,7 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 async function main() {
   // Connect to local Solana validator
-  const connection = new Connection('http://localhost:8999', 'confirmed');
+  const connection = new Connection('http://localhost:8899', 'confirmed');
   console.log('=== Solana Validator Info ===');
   
   try {
@@ -37,7 +37,7 @@ async function main() {
     
   } catch (err) {
     console.error('Error connecting to Solana validator:', err instanceof Error ? err.message : String(err));
-    console.error('Make sure the validator is running on port 8999');
+    console.error('Make sure the validator is running on port 8899');
   }
 }
 

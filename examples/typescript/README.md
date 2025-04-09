@@ -83,7 +83,7 @@ npm run simple-tx
 If automatic airdrops fail, you can use the Solana CLI to request an airdrop:
 
 ```
-solana airdrop 2 YOUR_WALLET_ADDRESS --url http://localhost:8999
+solana airdrop 2 YOUR_WALLET_ADDRESS --url http://localhost:8899
 ```
 
 ### Error: "Cannot find module '@solana/web3.js'"

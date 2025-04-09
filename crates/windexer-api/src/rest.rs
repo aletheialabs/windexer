@@ -12,6 +12,7 @@ use crate::health::HealthService;
 use crate::metrics::MetricsService;
 use crate::endpoints::create_deployment_router;
 use crate::types::HealthResponse;
+use crate::solana_client::{SolanaClient, SolanaCluster};
 
 /// Application state shared across handlers
 #[derive(Clone)]
@@ -22,13 +23,18 @@ pub struct AppState {
     pub metrics: Arc<MetricsService>,
     /// Application configuration
     pub config: Arc<RwLock<serde_json::Value>>,
+    /// Solana client
+    pub solana_client: Arc<SolanaClient>,
 }
 
 /// Create the API router with all routes
-pub fn create_api_router() -> Router {
+pub fn create_api_router(solana_cluster: SolanaCluster) -> Router {
     // Create services
     let health_service = Arc::new(HealthService::new());
     let metrics_service = Arc::new(MetricsService::new());
+    
+    // Create Solana client
+    let solana_client = Arc::new(SolanaClient::new(solana_cluster));
     
     // Create application state
     let state = AppState {
@@ -37,7 +43,9 @@ pub fn create_api_router() -> Router {
         config: Arc::new(RwLock::new(serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
             "name": env!("CARGO_PKG_NAME"),
+            "solana_cluster": format!("{:?}", solana_cluster),
         }))),
+        solana_client,
     };
     
     // Create router

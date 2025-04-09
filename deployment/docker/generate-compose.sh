@@ -67,7 +67,7 @@ for i in $(seq 1 $((NODES-1))); do
       - ../../data/node_$i:/app/data/node_$i
     ports:
       - "$NODE_PORT:9000"
-      - "$NODE_PORT_PLUS_ONE:9001"
+      - "$NODE_PORT_PLUS_ONE:10001"
     command: node --index $i --base-port 9000 --enable-tip-route --bootstrap-peers node-0:9000
     deploy:
       replicas: 1

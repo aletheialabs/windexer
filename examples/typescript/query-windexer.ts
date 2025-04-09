@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The port for the API server is 10000 + index (where index is 0 for the first node)
-const WINDEXER_URL = 'http://localhost:10000';
+const WINDEXER_URL = 'http://localhost:10001';
 
 async function main() {
   console.log('=== Querying wIndexer API ===');

@@ -2,13 +2,13 @@ import { Connection, PublicKey } from '@solana/web3.js';
 
 async function main() {
   // Connect to local Solana validator with WebSocket endpoint
-  const connection = new Connection('http://localhost:8999', {
+  const connection = new Connection('http://localhost:8899', {
     wsEndpoint: 'ws://localhost:9000',
     commitment: 'confirmed'
   });
 
   console.log('=== Subscribing to Solana Events ===');
-  console.log('RPC URL: http://localhost:8999');
+  console.log('RPC URL: http://localhost:8899');
   console.log('WebSocket URL: ws://localhost:9000');
   
   try {

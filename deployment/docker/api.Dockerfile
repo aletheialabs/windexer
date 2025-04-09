@@ -72,7 +72,7 @@ async fn validator() -> axum::Json<serde_json::Value> {
     axum::Json(json!({
         "validator": {
             "status": "running",
-            "rpc_port": 8999,
+            "rpc_port": 8899,
             "ws_port": 8900
         }
     }))

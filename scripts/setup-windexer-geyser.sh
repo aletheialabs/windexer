@@ -23,7 +23,7 @@ cat > config/geyser/windexer-geyser-config.json << EOF
     "rpc_addr": "127.0.0.1:8901",
     "bootstrap_peers": [],
     "data_dir": "./windexer_geyser_setup",
-    "solana_rpc_url": "http://127.0.0.1:8999"
+    "solana_rpc_url": "http://127.0.0.1:8899"
   },
   "accounts_selector": {
     "accounts": []
@@ -31,12 +31,13 @@ cat > config/geyser/windexer-geyser-config.json << EOF
   "transaction_selector": {
     "mentions": []
   },
-  "thread_count": 1,
-  "batch_size": 100,
+  "thread_count": 8,
+  "batch_size": 1000,
   "panic_on_error": false,
-  "use_mmap": false,
+  "use_mmap": true,
   "metrics": {
-    "enabled": false
+    "enabled": true,
+    "interval_seconds": 5
   }
 }
 EOF

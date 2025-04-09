@@ -32,8 +32,8 @@ async fn main() -> anyhow::Result<()> {
     let config = NodeConfig {
         node_id: "my-node".to_string(),
         listen_addr: "127.0.0.1:9000".parse()?,
-        rpc_addr: "127.0.0.1:9001".parse()?,
-        bootstrap_peers: vec!["127.0.0.1:9002".to_string()],
+        rpc_addr: "127.0.0.1:10001".parse()?,
+        bootstrap_peers: vec!["127.0.0.1:10002".to_string()],
         data_dir: "./data".to_string(),
         solana_rpc_url: "http://localhost:8899".to_string(),
         // ... other config

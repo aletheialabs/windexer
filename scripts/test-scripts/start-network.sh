@@ -40,7 +40,7 @@ echo -e "${GREEN}Validator started with PID $VALIDATOR_PID${NC}"
 # Wait for validator to start
 echo -e "${YELLOW}Waiting for validator to start...${NC}"
 for i in {1..30}; do
-  if solana --url http://localhost:8999 cluster-version &>/dev/null; then
+  if solana --url http://localhost:8899 cluster-version &>/dev/null; then
     echo -e "${GREEN}Validator is ready!${NC}"
     break
   fi
@@ -61,8 +61,8 @@ echo -e "${GREEN}Network started${NC}"
 echo -e "${GREEN}Network fully initialized!${NC}"
 echo -e "Access services at:"
 echo -e "  - Node 0: http://localhost:9000"
-echo -e "  - Node 1: http://localhost:9001"
-echo -e "  - Validator RPC: http://localhost:8999"
+echo -e "  - Node 1: http://localhost:10001"
+echo -e "  - Validator RPC: http://localhost:8899"
 echo -e ""
 echo -e "Run './scripts/test-scripts/generate-data.sh' to create test transactions"
 echo -e "Run './scripts/test-scripts/demo-interact.sh' to check network status"

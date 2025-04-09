@@ -1,2 +1,10 @@
 /node_modules
 /payer-keypair.json
+/plugin-keypair.json
+/data
+/dist
+/build
+/coverage
+/logs
+/tmp
+/cache
