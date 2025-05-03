@@ -42,7 +42,11 @@ use {
     windexer_common::config::NodeConfig,
 };
 
+mod data_fetcher;
+
 use std::convert::TryInto;
+
+pub use data_fetcher::HeliusDataFetcher;
 
 pub fn convert_keypair(solana_keypair: &agaveKeypair) -> identity::Keypair {
     let full_bytes = solana_keypair.to_bytes();
@@ -87,6 +91,7 @@ pub struct Node {
     metrics: Arc<RwLock<Metrics>>,
     known_peers: Arc<RwLock<HashSet<PeerId>>>,
     shutdown_rx: mpsc::Receiver<()>,
+    helius_data_fetcher: Option<Arc<HeliusDataFetcher>>,
 }
 
 // Implement Debug manually
@@ -96,6 +101,7 @@ impl std::fmt::Debug for Node {
             .field("config", &self.config)
             .field("metrics", &self.metrics)
             .field("known_peers", &self.known_peers)
+            .field("helius_data_fetcher", &self.helius_data_fetcher)
             .finish_non_exhaustive()
     }
 }
@@ -153,6 +159,7 @@ impl Node {
             metrics: Arc::new(RwLock::new(Metrics::new())),
             known_peers: Arc::new(RwLock::new(HashSet::new())),
             shutdown_rx,
+            helius_data_fetcher: None,
         };
         
         Ok((node, shutdown_tx))
@@ -309,5 +316,24 @@ impl Node {
     pub async fn stop(&self) -> Result<()> {
         // Implementation to properly shut down the node
         Ok(())
+    }
+
+    // Add a method to initialize Helius data fetcher
+    pub async fn init_helius_data_fetcher(&mut self, api_key: &str) -> Result<()> {
+        info!("Initializing Helius data fetcher");
+        let data_fetcher = Arc::new(HeliusDataFetcher::new(api_key));
+        
+        // Initialize the data fetcher
+        data_fetcher.initialize().await?;
+        
+        // Store the data fetcher
+        self.helius_data_fetcher = Some(data_fetcher);
+        
+        Ok(())
+    }
+    
+    // Add a method to get the Helius data fetcher
+    pub fn helius_data_fetcher(&self) -> Option<Arc<HeliusDataFetcher>> {
+        self.helius_data_fetcher.clone()
     }
 }
