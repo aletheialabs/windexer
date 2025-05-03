@@ -1,3 +1,5 @@
+// src/server.rs
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use anyhow::Result;
@@ -5,6 +7,7 @@ use tracing::{info, error};
 
 use crate::rest::{ApiServer, ApiConfig};
 use crate::types::NodeInfo;
+use crate::types::{HealthStatus, HealthCheckResult};
 
 /// Run a standalone API server
 pub async fn run_api_server(
@@ -28,13 +31,17 @@ pub async fn run_api_server(
     
     // Register default health checks
     let health = server.health();
-    health.register("system", || async {
-        crate::types::HealthCheckResult {
-            status: crate::types::HealthStatus::Healthy,
-            details: Some("System is running".to_string()),
-            metrics: None,
-        }
-    });
+    
+    // Use the new async registration method
+    health.register_async("system", Arc::new(|| {
+        Box::pin(async {
+            HealthCheckResult {
+                status: HealthStatus::Healthy,
+                details: Some("System is running".to_string()),
+                metrics: None,
+            }
+        })
+    })).await;
     
     // Run the server (this will block until the server stops)
     server.start().await?;
@@ -63,7 +70,7 @@ pub fn create_url_health_check(
     url: String,
     timeout_ms: u64,
     name: &str,
-) -> impl Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::types::HealthCheckResult> + Send>> {
+) -> impl Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = HealthCheckResult> + Send>> {
     use std::time::Duration;
     let name = name.to_string();
     
@@ -73,7 +80,6 @@ pub fn create_url_health_check(
         let timeout = Duration::from_millis(timeout_ms);
         
         Box::pin(async move {
-            use crate::types::{HealthStatus, HealthCheckResult};
             use std::collections::HashMap;
             
             tracing::debug!("Checking health of {} at {}", name, url);
