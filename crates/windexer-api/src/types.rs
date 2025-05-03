@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use axum::{response::IntoResponse, http::StatusCode, Json};
 
 /// Standard API response format
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,7 +24,7 @@ impl<T> ApiResponse<T> {
             error: None,
         }
     }
-
+    
     /// Create an error response
     pub fn error(message: impl Into<String>) -> Self {
         Self {
@@ -51,6 +52,23 @@ pub enum ApiError {
     
     #[error("Forbidden: {0}")]
     Forbidden(String),
+}
+
+/// Convert ApiError to HTTP response
+impl IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, error_message) = match self {
+            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
+            ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
+        };
+        
+        let body = Json(ApiResponse::<()>::error(error_message));
+        
+        (status, body).into_response()
+    }
 }
 
 /// Status response format
@@ -118,4 +136,4 @@ pub struct NodeInfo {
     pub peer_count: usize,
     /// Whether this node is a bootstrap node
     pub is_bootstrap: bool,
-} 
+}
