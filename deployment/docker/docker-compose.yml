@@ -1,29 +1,45 @@
-version: '3.8'
+x-environment: &default-env
+  NODES: ${NODES:-3}
+  BASE_PORT: ${BASE_PORT:-9000}
+  RPC_PORT: ${RPC_PORT:-8999}
+  WS_PORT: ${WS_PORT:-8900}
+  FAUCET_PORT: ${FAUCET_PORT:-9910}
+  API_PORT: ${API_PORT:-3000}
+  RUST_LOG: ${RUST_LOG:-info}
 
 services:
   solana-validator:
-    image: solanalabs/solana:v2.2.0
+    image: validator-image
+    platform: linux/amd64
     container_name: solana-validator
     volumes:
-      - ../../data/validator:/data
-      - ../../config/geyser:/config/geyser
-      - geyser-plugin:/app
+      - ./config/validator:/root/.config/solana/cli
+      - ./config/geyser:/root/config/geyser
+      - ./data/solana:/root/data/solana
+      - geyser-plugin:/root/plugins
     ports:
-      - "8899:8899"
-      - "8900:8900"
-      - "9910:9910"
+      - "${RPC_PORT:-8899}:8899"
+      - "${WS_PORT:-8900}:8900"
+      - "${FAUCET_PORT:-9900}:9900"
     environment:
-      - RUST_LOG=info
-    command: >
-      solana-test-validator
-      --rpc-port 8899
-      --geyser-plugin-config /config/geyser/windexer-geyser-config.json
-      --reset
-      --faucet-port 9910
-      --bind-address 0.0.0.0
-      --no-bpf-jit
+      - NODE_LOG_LEVEL=${LOG_LEVEL:-info}
+    command: [
+      "solana-test-validator",
+      "--ledger", "/root/data/solana",
+      "--faucet-sol", "200000000",
+      "--limit-ledger-size", "50000000",
+      "--geyser-plugin-config", "/root/config/geyser/plugin-config.json",
+      "--rpc-port", "8899",
+      "--quiet"
+    ]
     depends_on:
-      - geyser-plugin
+      geyser-plugin:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8899 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - windexer-network
 
@@ -36,11 +52,11 @@ services:
       - geyser-plugin:/app
       - ../../data/geyser:/app/data/geyser
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=${RUST_LOG:-info}
     networks:
       - windexer-network
 
-  # Start nodes (matching NODES=3 in Makefile)
+  # Node-0 is defined in the main file as it's always required
   node-0:
     build:
       context: ../..
@@ -49,94 +65,20 @@ services:
     volumes:
       - ../../data/node_0:/app/data/node_0
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${BASE_PORT}:9000"
+      - "${BASE_PORT_PLUS_ONE:-9001}:9001"
     environment:
-      - RUST_LOG=info
-      - SOLANA_RPC_URL=http://solana-validator:8899
+      - RUST_LOG=${RUST_LOG:-info}
+      - SOLANA_RPC_URL=http://solana-validator:8999
       - SOLANA_WS_URL=ws://solana-validator:8900
     command: node --index 0 --base-port 9000 --enable-tip-route
     networks:
       - windexer-network
     depends_on:
-      - solana-validator
+      solana-validator:
+        condition: service_healthy
 
-  node-1:
-    build:
-      context: ../..
-      dockerfile: deployment/docker/Dockerfile.node
-    container_name: windexer-node-1
-    volumes:
-      - ../../data/node_1:/app/data/node_1
-    ports:
-      - "9100:9000"
-      - "9101:9001"
-    environment:
-      - RUST_LOG=info
-      - SOLANA_RPC_URL=http://solana-validator:8899
-      - SOLANA_WS_URL=ws://solana-validator:8900
-    command: node --index 1 --base-port 9000 --enable-tip-route
-    networks:
-      - windexer-network
-    depends_on:
-      - node-0
-
-  node-2:
-    build:
-      context: ../..
-      dockerfile: deployment/docker/Dockerfile.node
-    container_name: windexer-node-2
-    volumes:
-      - ../../data/node_2:/app/data/node_2
-    ports:
-      - "9200:9000"
-      - "9201:9001"
-    environment:
-      - RUST_LOG=info
-      - SOLANA_RPC_URL=http://solana-validator:8899
-      - SOLANA_WS_URL=ws://solana-validator:8900
-    command: node --index 2 --base-port 9000 --enable-tip-route
-    networks:
-      - windexer-network
-    depends_on:
-      - node-0
-
-  indexer-1:
-    build:
-      context: ../..
-      dockerfile: deployment/docker/Dockerfile.node
-    container_name: windexer-indexer-1
-    volumes:
-      - ../../data/indexer_1:/app/data/indexer_1
-    ports:
-      - "10001:10001"
-    environment:
-      - RUST_LOG=info
-      - SOLANA_RPC_URL=http://solana-validator:8899
-    command: indexer --index 1 --bootstrap-peers node-0:9000
-    networks:
-      - windexer-network
-    depends_on:
-      - node-0
-
-  indexer-2:
-    build:
-      context: ../..
-      dockerfile: deployment/docker/Dockerfile.node
-    container_name: windexer-indexer-2
-    volumes:
-      - ../../data/indexer_2:/app/data/indexer_2
-    ports:
-      - "10002:10002"
-    environment:
-      - RUST_LOG=info
-      - SOLANA_RPC_URL=http://solana-validator:8899
-    command: indexer --index 2 --bootstrap-peers node-1:9000
-    networks:
-      - windexer-network
-    depends_on:
-      - node-1
-
+  # Postgres database
   postgres:
     image: postgres:15
     container_name: windexer-postgres
@@ -145,43 +87,16 @@ services:
       - POSTGRES_PASSWORD=windexer
       - POSTGRES_DB=windexer
     ports:
-      - "5432:5432"
+      - "5436:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - windexer-network
     restart: unless-stopped
 
-  # AVS Service based on Makefile
-  camb-avs:
-    image: node:18
-    container_name: cambrian-avs
-    working_dir: /app
-    volumes:
-      - ../../avs-demo:/app
-      - ../../avs-demo/configs/avs-wallet.json:/app/avs-wallet.json
-    environment:
-      - SOLANA_RPC_URL=http://solana-validator:8899
-      - SOLANA_WS_URL=ws://solana-validator:8900
-      - CAMBRIAN_POA_NAME=${CAMBRIAN_POA_NAME:-cambrian_local_demo}
-      - AVS_ADMIN_KEY=/app/avs-wallet.json
-      - AVS_HTTP_PORT=3000
-      - AVS_WS_PORT=3001
-      - LOG_LEVEL=info
-    ports:
-      - "3000:3000"
-      - "3001:3001"
-    command: >
-      bash -c "npm install -g @cambrianone/camb-client && 
-              camb start-avs"
-    networks:
-      - windexer-network
-    restart: unless-stopped
-    depends_on:
-      - solana-validator
-
-  # Data generator using scripts from Makefile
+  # Data generator
   data-generator:
+    platform: linux/amd64
     build:
       context: ../..
       dockerfile: deployment/docker/Dockerfile.node
@@ -189,19 +104,45 @@ services:
     volumes:
       - ../../scripts:/app/scripts
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=${RUST_LOG:-info}
+      - SOLANA_RPC_URL=http://solana-validator:8999
+      - SOLANA_RPC_PORT=8999
     command: >
       bash -c "
         sleep 30 &&
         echo 'Generating sample data...' &&
-        /app/scripts/test-scripts/demo-interact.sh
+        KEYPAIR_PATH=/app/examples/typescript/payer-keypair.json /app/scripts/test-scripts/generate-data.sh
       "
     networks:
       - windexer-network
     depends_on:
-      - indexer-1
-      - indexer-2
-      - solana-validator
+      solana-validator:
+        condition: service_healthy
+      node-0:
+        condition: service_started
+
+  # API Server
+  api-server:
+    container_name: api-server
+    image: ${DOCKER_REPO:-anzaxyz}/windexer-api:${VERSION:-latest}
+    build:
+      context: ../../
+      dockerfile: deployment/docker/api.Dockerfile
+      args:
+        CARGO_BUILD_ARGS: --release
+    environment:
+      <<: *default-env
+      API_PORT: ${API_PORT:-3000}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      solana-validator:
+        condition: service_healthy
+      node-0:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - windexer-network
 
 volumes:
   geyser-plugin:

@@ -1,0 +1,85 @@
+# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
+# Generated with generate-helius-compose.sh
+services:
+  # Base node definition
+  node-base: &node-base
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.node
+    environment:
+      - RUST_LOG=info
+      - SOLANA_RPC_URL=
+      - SOLANA_WS_URL=
+      - NETWORK=mainnet
+      - BASE_PORT=9000
+    networks:
+      - windexer-network
+    depends_on:
+      - node-0
+    restart: unless-stopped
+    deploy:
+      replicas: 0
+  # Base indexer definition
+  indexer-base: &indexer-base
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.node
+    environment:
+      - RUST_LOG=info
+      - SOLANA_RPC_URL=
+      - SOLANA_WS_URL=
+      - NETWORK=mainnet
+      - BASE_PORT=9000
+    networks:
+      - windexer-network
+    depends_on:
+      - node-0
+    restart: unless-stopped
+    deploy:
+      replicas: 0
+  # Node 1
+  node-1:
+    <<: *node-base
+    container_name: windexer-node-1
+    volumes:
+      - /home/winuser/windexer/data/node_1:/app/data/node_1
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    command: node --index 1 --base-port 9000 --enable-tip-route --bootstrap-peers node-0:9000
+    deploy:
+      replicas: 1
+  # Node 2
+  node-2:
+    <<: *node-base
+    container_name: windexer-node-2
+    volumes:
+      - /home/winuser/windexer/data/node_2:/app/data/node_2
+    ports:
+      - "9200:9000"
+      - "9201:9001"
+    command: node --index 2 --base-port 9000 --enable-tip-route --bootstrap-peers node-0:9000
+    deploy:
+      replicas: 1
+  # Indexer 1
+  indexer-1:
+    <<: *indexer-base
+    container_name: windexer-indexer-1
+    volumes:
+      - /home/winuser/windexer/data/indexer_1:/app/data/indexer_1
+    ports:
+      - "10001:10001"
+    command: indexer --index 1 --bootstrap-peers node-0:9000 --base-port 10001
+    deploy:
+      replicas: 1
+  # Indexer 2
+  indexer-2:
+    <<: *indexer-base
+    container_name: windexer-indexer-2
+    volumes:
+      - /home/winuser/windexer/data/indexer_2:/app/data/indexer_2
+    ports:
+      - "10002:10002"
+    command: indexer --index 2 --bootstrap-peers node-0:9000 --base-port 10002
+    deploy:
+      replicas: 1

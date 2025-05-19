@@ -2,7 +2,9 @@
 
 pub mod account;
 pub mod block;
+pub mod message;
 pub mod transaction;
+pub mod helius;
 
 pub use account::AccountData;
 pub use block::{BlockData, EntryData, SlotStatusData};

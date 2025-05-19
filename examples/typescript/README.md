@@ -1,70 +1,91 @@
 # wIndexer TypeScript Examples
 
-Examples demonstrating how to interact with wIndexer using TypeScript.
+This directory contains TypeScript examples for interacting with wIndexer and Solana.
 
-## Overview
+## Prerequisites
 
-This directory contains TypeScript examples that show how to:
-- Query data from wIndexer nodes
-- Subscribe to updates via WebSocket
-- Query the Solana blockchain directly
-- Generate test transactions
+- [Node.js](https://nodejs.org/) (v16 or later)
+- [npm](https://www.npmjs.com/) or [bun](https://bun.sh/)
+- Local Solana validator running with Geyser plugin
+- wIndexer node running
 
 ## Setup
 
 1. Install dependencies:
-```bash
-npm install
+   ```
+   npm install
+   ```
+   or with bun:
+   ```
+   bun install
+   ```
+
+2. Make sure your services are running:
+   ```
+   # Terminal 1: Run Solana validator with Geyser plugin
+   cd /home/vivek/projects/aletheia/windexer/windexer
+   make run-validator-with-geyser
+   
+   # Terminal 2: Run wIndexer node
+   cd /home/vivek/projects/aletheia/windexer/windexer
+   make run-node-0
+   ```
+
+## Available Examples
+
+### Generate Test Transactions
+
+The simplest way to generate test transactions:
+
 ```
-2. Make sure your wIndexer network is running. Start with:
-```bash
-cd ../..  # Navigate to project root
-make run-validator-with-geyser
-# In another terminal
-make run-node-1
-# In another terminal
-make run-indexer-1
+npm run simple-tx
 ```
 
-## Examples
+This script sends simple transactions without requiring WebSocket confirmation.
 
-1. Query wIndexer API
+### Query Solana Validator
 
-Demonstrates how to query the wIndexer HTTP API:
-```bash
-npm run query-windexer
 ```
-
-2. WebSocket Subscription
-
-Shows how to subscribe to real-time updates:
-```bash
-npm run websocket
-```
-
-3. Query Solana
-
-Queries the Solana blockchain directly for comparison:
-```bash
 npm run query-solana
 ```
 
-4. Generate Test Data
+This script queries basic information from your local Solana validator.
 
-Creates test transactions to observe indexing:
-```bash
-npm run generate-data
+### Subscribe to Solana Events
+
+```
+npm run websocket
 ```
 
-## Configuration
+This script subscribes to Solana events via WebSockets.
 
-The examples assume that:
-- Solana validator is running on port 8899
-- wIndexer node is running on port 9000
-- wIndexer indexer is running on port 10001
+### Query wIndexer API
 
-You can modify these in the individual example files if needed.
+```
+npm run query-windexer
+```
 
-## Further Reading
+This script queries the wIndexer API for indexed transactions and accounts.
 
-For more information on wIndexer, see the [wIndexer Documentation](https://docs.windexer.com).
+## Troubleshooting
+
+### WebSocket Errors
+
+If you encounter WebSocket errors with `generate-data.ts`, try using the simpler 
+`simple-tx.ts` script which doesn't rely on WebSockets for confirmation:
+
+```
+npm run simple-tx
+```
+
+### Airdrop Issues
+
+If automatic airdrops fail, you can use the Solana CLI to request an airdrop:
+
+```
+solana airdrop 2 YOUR_WALLET_ADDRESS --url http://localhost:8999
+```
+
+### Error: "Cannot find module '@solana/web3.js'"
+
+Run `npm install` to ensure all dependencies are installed correctly.

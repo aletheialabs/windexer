@@ -1,7 +1,18 @@
 #!/bin/bash
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}=== Setting up wIndexer Geyser Plugin ===${NC}"
 
 # Create Geyser plugin config directory
 mkdir -p config/geyser
+
+echo -e "${YELLOW}Creating Geyser plugin configuration...${NC}"
 
 cat > config/geyser/windexer-geyser-config.json << EOL
 {
@@ -12,7 +23,7 @@ cat > config/geyser/windexer-geyser-config.json << EOL
     "rpc_addr": "127.0.0.1:9877",
     "bootstrap_peers": ["127.0.0.1:9000", "127.0.0.1:9001"],
     "data_dir": "./data/geyser",
-    "solana_rpc_url": "http://localhost:8899"
+    "solana_rpc_url": "http://localhost:8999"
   },
   "accounts_selector": {
     "accounts": null,
@@ -29,4 +40,4 @@ cat > config/geyser/windexer-geyser-config.json << EOL
 }
 EOL
 
-echo "Geyser plugin configuration created at config/geyser/windexer-geyser-config.json" 
+echo -e "${GREEN}✓ Geyser plugin configuration created at config/geyser/windexer-geyser-config.json${NC}" 

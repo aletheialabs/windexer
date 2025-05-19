@@ -1,0 +1,71 @@
+version: '3.8'
+
+x-environment: &default-env
+  NODES: ${NODES:-3}
+  BASE_PORT: ${BASE_PORT:-9000}
+  API_PORT: ${API_PORT:-3000}
+  RUST_LOG: ${RUST_LOG:-info}
+  SOLANA_RPC_URL: ${SOLANA_RPC_URL}
+  SOLANA_WS_URL: ${SOLANA_WS_URL}
+  NETWORK: ${NETWORK:-mainnet}
+
+services:
+  # Node-0 is defined as the primary bootstrap node
+  node-0:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.node
+    container_name: windexer-node-0
+    volumes:
+      - ${STORAGE_DIR:-/home/winuser/windexer/data}/node_0:/app/data/node_0
+    ports:
+      - "${BASE_PORT}:9000"
+      - "${BASE_PORT_PLUS_ONE:-9001}:9001"
+    environment:
+      <<: *default-env
+    command: node --index 0 --base-port 9000 --enable-tip-route
+    networks:
+      - windexer-network
+    restart: unless-stopped
+
+  # Postgres database
+  postgres:
+    image: postgres:15
+    container_name: windexer-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-windexer}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-windexer}
+      - POSTGRES_DB=${POSTGRES_DB:-windexer}
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - windexer-network
+    restart: unless-stopped
+
+  # API Server
+  api-server:
+    container_name: api-server
+    build:
+      context: ../../
+      dockerfile: deployment/docker/api.Dockerfile
+      args:
+        CARGO_BUILD_ARGS: --release
+    environment:
+      <<: *default-env
+      API_PORT: ${API_PORT:-3000}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      - node-0
+    restart: unless-stopped
+    networks:
+      - windexer-network
+
+volumes:
+  postgres-data:
+
+networks:
+  windexer-network:
+    driver: bridge

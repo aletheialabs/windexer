@@ -1,8 +1,8 @@
-FROM rust:1.76-slim-bullseye as builder
+FROM rust:slim-bookworm as builder
 
 WORKDIR /app
 
-# Install dependencies
+# Install minimal build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     pkg-config \
@@ -24,19 +24,19 @@ COPY crates/windexer-examples/Cargo.toml ./crates/windexer-examples/
 
 # Create dummy source files for workspace members
 RUN mkdir -p crates/windexer-api/src \
-    && mkdir -p crates/windexer-common/src \
-    && mkdir -p crates/windexer-geyser/src \
-    && mkdir -p crates/windexer-jito-staking/src \
-    && mkdir -p crates/windexer-network/src \
-    && mkdir -p crates/windexer-store/src \
-    && mkdir -p crates/windexer-examples/src \
+    crates/windexer-common/src \
+    crates/windexer-geyser/src \
+    crates/windexer-jito-staking/src \
+    crates/windexer-network/src \
+    crates/windexer-store/src \
+    crates/windexer-examples/src \
     && touch crates/windexer-api/src/lib.rs \
-    && touch crates/windexer-common/src/lib.rs \
-    && touch crates/windexer-geyser/src/lib.rs \
-    && touch crates/windexer-jito-staking/src/lib.rs \
-    && touch crates/windexer-network/src/lib.rs \
-    && touch crates/windexer-store/src/lib.rs \
-    && touch crates/windexer-examples/src/lib.rs \
+    crates/windexer-common/src/lib.rs \
+    crates/windexer-geyser/src/lib.rs \
+    crates/windexer-jito-staking/src/lib.rs \
+    crates/windexer-network/src/lib.rs \
+    crates/windexer-store/src/lib.rs \
+    crates/windexer-examples/src/lib.rs \
     && echo 'fn main() {}' > crates/windexer-examples/src/node.rs \
     && echo 'fn main() {}' > crates/windexer-examples/src/indexer.rs
 
@@ -46,18 +46,23 @@ RUN cargo build --bin node --bin indexer
 # Copy the actual source code
 COPY crates ./crates
 COPY scripts ./scripts
+COPY examples ./examples
 
 # Build the node and indexer binaries
-RUN cargo build --release --bin node --bin indexer
+RUN cargo build --release --bin node --bin indexer --bin windexer-api
 
-# Runtime stage
-FROM debian:bullseye-slim
+# Runtime stage - Node.js for TypeScript examples + Rust binaries
+FROM node:20-slim
 
+# Install required packages for running scripts and utilities
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
-    libssl1.1 \
+    libssl3 \
     curl \
+    jq \
+    bc \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -65,16 +70,33 @@ WORKDIR /app
 # Copy the build artifacts from the builder stage
 COPY --from=builder /app/target/release/node /app/
 COPY --from=builder /app/target/release/indexer /app/
-COPY --from=builder /app/scripts/test-scripts /app/scripts/
+COPY --from=builder /app/target/release/windexer-api /app/
+COPY --from=builder /app/scripts /app/scripts/
+COPY --from=builder /app/examples /app/examples/
 
-# Create data directory
-RUN mkdir -p /app/data/node_1 /app/data/indexer_1
+# Make scripts executable
+RUN chmod +x /app/scripts/test-scripts/*.sh
+
+# Install TypeScript and ts-node for examples
+WORKDIR /app/examples/typescript
+RUN npm install --quiet
+
+# Back to main app directory
+WORKDIR /app
+
+# Create necessary data directories
+RUN mkdir -p /app/data/node_0 \
+    /app/data/node_1 \
+    /app/data/node_2 \
+    /app/data/indexer_1 \
+    /app/data/indexer_2
 
 # Set environment variables
 ENV RUST_LOG=info
+ENV PATH="/app:${PATH}"
 
 # Expose necessary ports (P2P, API)
-EXPOSE 9000-9002 10001-10002
+EXPOSE 9000-9002 10000-10100 
 
 # Create an entrypoint script
 RUN echo '#!/bin/bash\n\
@@ -89,4 +111,4 @@ else\n\
 fi' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["node", "--index", "1", "--base-port", "9000", "--enable-tip-route"]
+CMD ["node", "--index", "0", "--base-port", "9000", "--enable-tip-route"]
