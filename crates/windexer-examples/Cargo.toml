@@ -21,6 +21,13 @@ path = "src/helius.rs"
 name = "helius_network"
 path = "src/helius_network.rs"
 
+name = "local-gen"
+path = "src/local_gen.rs"
+
+[[bin]]
+name = "local-indexer"
+path = "src/local_indexer.rs"
+
 [dependencies]
 # Internal dependencies
 windexer-common = { path = "../windexer-common" }
@@ -30,6 +37,7 @@ windexer-store = { path = "../windexer-store" }
 
 # Solana
 solana-sdk.workspace = true
+solana-transaction-status.workspace = true
 
 # Async runtime
 tokio.workspace = true
