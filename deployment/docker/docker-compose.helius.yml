@@ -1,31 +1,67 @@
 version: '3.8'
 
 x-environment: &default-env
-  NODES: ${NODES:-3}
-  BASE_PORT: ${BASE_PORT:-9000}
+  RUST_LOG: ${RUST_LOG:-debug}
   API_PORT: ${API_PORT:-3000}
-  RUST_LOG: ${RUST_LOG:-info}
-  SOLANA_RPC_URL: ${SOLANA_RPC_URL}
-  SOLANA_WS_URL: ${SOLANA_WS_URL}
+  HELIUS_API_KEY: ${HELIUS_API_KEY}
+  SOLANA_RPC_URL: "https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}"
+  SOLANA_WS_URL: "wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}"
   NETWORK: ${NETWORK:-mainnet}
 
 services:
-  # Node-0 is defined as the primary bootstrap node
-  node-0:
+  # API Server
+  api-server:
+    container_name: api-server
     build:
-      context: ../..
-      dockerfile: deployment/docker/Dockerfile.node
+      context: ../../
+      dockerfile: deployment/docker/api.Dockerfile
+    environment:
+      <<: *default-env
+    ports:
+      - "${API_PORT:-3000}:${API_PORT:-3000}"
+    restart: unless-stopped
+    networks:
+      - windexer-network
+    depends_on:
+      - postgres
+
+  # Node 0 (Bootstrap Node)
+  node-0:
     container_name: windexer-node-0
+    build:
+      context: ../../
+      dockerfile: deployment/docker/Dockerfile.node
+    environment:
+      <<: *default-env
+      BASE_PORT: 9000
     volumes:
       - ${STORAGE_DIR:-/home/winuser/windexer/data}/node_0:/app/data/node_0
     ports:
-      - "${BASE_PORT}:9000"
-      - "${BASE_PORT_PLUS_ONE:-9001}:9001"
-    environment:
-      <<: *default-env
+      - "9000:9000"
+      - "9001:9001"
     command: node --index 0 --base-port 9000 --enable-tip-route
     networks:
       - windexer-network
+    restart: unless-stopped
+
+  # Indexer 1
+  indexer-1:
+    container_name: windexer-indexer-1
+    build:
+      context: ../../
+      dockerfile: deployment/docker/Dockerfile.node
+    environment:
+      <<: *default-env
+      BASE_PORT: 10001
+    volumes:
+      - ${STORAGE_DIR:-/home/winuser/windexer/data}/indexer_1:/app/data/indexer_1
+    ports:
+      - "10001:10001"
+    command: indexer --index 1 --bootstrap-peers node-0:9000 --base-port 10001
+    networks:
+      - windexer-network
+    depends_on:
+      - node-0
     restart: unless-stopped
 
   # Postgres database
@@ -43,25 +79,6 @@ services:
     networks:
       - windexer-network
     restart: unless-stopped
-
-  # API Server
-  api-server:
-    container_name: api-server
-    build:
-      context: ../../
-      dockerfile: deployment/docker/api.Dockerfile
-      args:
-        CARGO_BUILD_ARGS: --release
-    environment:
-      <<: *default-env
-      API_PORT: ${API_PORT:-3000}
-    ports:
-      - "${API_PORT:-3000}:3000"
-    depends_on:
-      - node-0
-    restart: unless-stopped
-    networks:
-      - windexer-network
 
 volumes:
   postgres-data:
