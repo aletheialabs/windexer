@@ -39,51 +39,32 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}=== Starting wIndexer Helius Environment ===${NC}"
 echo -e "${YELLOW}Configuration:${NC}"
 echo -e "  Network: ${NETWORK:-mainnet}"
-echo -e "  Nodes: ${NODES:-3}"
-echo -e "  Indexers: ${INDEXERS:-2}"
-echo -e "  Base port: ${BASE_PORT:-9000}"
-echo -e "  Indexer base port: ${INDEXER_BASE_PORT:-10000}"
 echo -e "  API port: ${API_PORT:-3000}"
 echo -e "  Log level: ${RUST_LOG:-info}"
 echo -e "  RPC URL: ${SOLANA_RPC_URL}"
 echo -e "  WS URL: ${SOLANA_WS_URL}"
 
+# Clean up any existing containers
+echo -e "${YELLOW}Cleaning up existing containers...${NC}"
+docker-compose -f docker-compose.helius.yml down --remove-orphans 2>/dev/null || true
+
 # Ensure data directories exist
-mkdir -p ${STORAGE_DIR:-/home/winuser/windexer/data}/{node_0,postgres}
-for i in $(seq 1 $((${NODES:-3}-1))); do
-  mkdir -p ${STORAGE_DIR:-/home/winuser/windexer/data}/node_$i
-done
-for i in $(seq 1 ${INDEXERS:-2}); do
-  mkdir -p ${STORAGE_DIR:-/home/winuser/windexer/data}/indexer_$i
-done
+mkdir -p ${STORAGE_DIR:-/home/winuser/windexer/data}/{postgres}
 
-# Generate docker-compose.override.yml
-echo -e "${YELLOW}Generating docker-compose configuration...${NC}"
-chmod +x ./generate-helius-compose.sh
-./generate-helius-compose.sh
-
-# Build and start the containers
+# Build and start the API and postgres containers only
 echo -e "${YELLOW}Building and starting services...${NC}"
-docker-compose -f docker-compose.helius.yml -f docker-compose.helius.override.yml build
-docker-compose -f docker-compose.helius.yml -f docker-compose.helius.override.yml up -d
+docker-compose -f docker-compose.helius.yml build
+docker-compose -f docker-compose.helius.yml up -d
 
 echo -e "${GREEN}Services started!${NC}"
-echo -e "${YELLOW}Services:${NC}"
-
-# Display node info
-for i in $(seq 0 $((${NODES:-3}-1))); do
-  NODE_PORT=$((${BASE_PORT:-9000} + i*100))
-  echo -e "  Node $i: http://localhost:$NODE_PORT/api/status"
-done
-
-# Display indexer info
-for i in $(seq 1 ${INDEXERS:-2}); do
-  INDEXER_PORT=$((${INDEXER_BASE_PORT:-10000} + i))
-  echo -e "  Indexer $i: http://localhost:${INDEXER_PORT}/api/status"
-done
-
 echo -e "${YELLOW}API endpoint:${NC}"
 echo -e "  http://localhost:${API_PORT:-3000}/api/status"
+echo -e "  http://localhost:${API_PORT:-3000}/api/health"
+echo -e "  http://localhost:${API_PORT:-3000}/api/blocks/latest"
+
+echo -e "${GREEN}You can now use the Jito MEV analyzer with these endpoints:${NC}"
+echo -e "  cd ~/windexer/examples/python"
+echo -e "  ./run_jito_analyzer.sh --api-url http://localhost:${API_PORT:-3000}/api --blocks 10 --cli-only"
 
 echo -e "${YELLOW}To stop the environment:${NC}"
-echo -e "  ./stop-helius.sh"
+echo -e "  docker-compose -f docker-compose.helius.yml down"

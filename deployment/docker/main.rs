@@ -11,26 +11,6 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tower_http::cors::{CorsLayer, Any};
-use std::sync::Arc;
-use anyhow::Result;
-use tracing::{info, error};
-
-use crate::server::run_api_server;
-use crate::rest::{ApiServer, ApiConfig};
-use crate::types::NodeInfo;
-
-mod account_data_manager;
-mod account_endpoints;
-mod block_endpoints;
-mod endpoints;
-mod health;
-mod helius;
-mod metrics;
-mod rest;
-mod server;
-mod transaction_data_manager;
-mod transaction_endpoints;
-mod types;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ApiResponse<T> {
@@ -93,100 +73,61 @@ struct TransactionResponse {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
+    // Setup logging
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()))
         .finish();
     
-    if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-        eprintln!("Warning: Failed to set global tracing subscriber: {}", e);
-    }
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to set up global logger");
 
-    let port = std::env::var("API_PORT")
-        .unwrap_or_else(|_| "3001".to_string())
-        .parse::<u16>()
-        .unwrap_or(3001);
+    // Start time
+    let start_time = SystemTime::now();
     
+    // Get port from environment
+    let port = std::env::var("API_PORT")
+        .unwrap_or_else(|_| "3000".to_string())
+        .parse::<u16>()
+        .unwrap_or(3000);
+    
+    // Bind address
     let bind_addr = std::env::var("BIND_ADDR")
         .unwrap_or_else(|_| format!("0.0.0.0:{}", port));
+    let socket_addr = SocketAddr::from_str(&bind_addr)?;
+
+    // Configure CORS
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_origin(Any);
+
+    // Build router
+    let app = Router::new()
+        // Health endpoints
+        .route("/api/health", get(health_handler))
+        .route("/api/status", get(status_handler))
+        
+        // Block endpoints
+        .route("/api/blocks/latest", get(latest_block_handler))
+        .route("/api/blocks/:slot", get(block_by_slot_handler))
+        
+        // Transaction endpoints
+        .route("/api/transaction/:signature", get(transaction_handler))
+        
+        // Apply CORS
+        .layer(cors);
+
+    // Start the server
+    let listener = tokio::net::TcpListener::bind(socket_addr).await?;
+    tracing::info!("Listening on http://{}", socket_addr);
     
-    let service_name = std::env::var("SERVICE_NAME")
-        .unwrap_or_else(|_| "windexer-api".to_string());
+    axum::serve(listener, app).await?;
     
-    let version = std::env::var("SERVICE_VERSION")
-        .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
-
-    let helius_api_key = std::env::var("HELIUS_API_KEY")
-        .unwrap_or_else(|_| "test-api-key".to_string());
-
-    let node_info = Some(NodeInfo {
-        node_id: "api-node-1".to_string(),
-        node_type: "api".to_string(),
-        listen_addr: bind_addr.clone(),
-        peer_count: 0,
-        is_bootstrap: false,
-    });
-
-    let config = ApiConfig {
-        bind_addr: SocketAddr::from_str(&bind_addr)?,
-        service_name: service_name.clone(),
-        version: version.clone(),
-        enable_metrics: true,
-        node_info: node_info.clone(),
-        path_prefix: Some("/api".to_string()),
-    };
-
-    let helius_client = Arc::new(helius::HeliusClient::new(&helius_api_key));
-
-    match helius_client.get_latest_block().await {
-        Ok(_) => info!("Successfully connected to Helius API"),
-        Err(e) => {
-            error!("Failed to connect to Helius API: {}", e);
-            return Err(anyhow::anyhow!("Failed to connect to Helius API: {}", e));
-        }
-    }
-
-    let account_data_manager = Arc::new(account_data_manager::AccountDataManager::new(helius_client.clone()));
-
-    let transaction_data_manager = Arc::new(transaction_data_manager::TransactionDataManager::new(helius_client.clone()));
-
-    // Initializ account data manager
-    info!("Initializing account data manager");
-    if let Err(e) = account_data_manager.initialize().await {
-        tracing::warn!("Failed to initialize account data manager: {}", e);
-        // We'll continue even if this fails, as it might be a transient error
-    }
-
-    info!("Initializing transaction data manager");
-    if let Err(e) = transaction_data_manager.initialize().await {
-        tracing::warn!("Failed to initialize transaction data manager: {}", e);
-        // We'll continue even if this fails, as it might be a transient error
-    }
-
-    let mut server = ApiServer::new(config);
-    
-    server.set_account_data_manager(account_data_manager);
-    server.set_transaction_data_manager(transaction_data_manager);
-    server.set_helius_client(helius_client);
-    let health = server.health();
-    health.register("api", Arc::new(|| true)).await;
-    
-    let metrics = server.metrics();
-    metrics.register_collector(|| {
-        let mut metrics = std::collections::HashMap::new();
-        metrics.insert("memory_usage".to_string(), serde_json::json!(100));
-        metrics.insert("cpu_usage".to_string(), serde_json::json!(5));
-        metrics.insert("active_connections".to_string(), serde_json::json!(10));
-        metrics
-    });
-
-    info!("Starting API server on {}", bind_addr);
-    server.start().await?;
-
     Ok(())
 }
 
 async fn status_handler() -> Json<ApiResponse<StatusResponse>> {
+    // Start time of the server (for this example we use a fixed time)
     let start_time = SystemTime::now().checked_sub(Duration::from_secs(3600)).unwrap_or(UNIX_EPOCH);
     
     let status = StatusResponse {
@@ -200,6 +141,7 @@ async fn status_handler() -> Json<ApiResponse<StatusResponse>> {
 }
 
 async fn health_handler() -> Json<HealthResponse> {
+    // Start time of the server (for this example we use a fixed time)
     let start_time = SystemTime::now().checked_sub(Duration::from_secs(3600)).unwrap_or(UNIX_EPOCH);
     
     let mut checks = std::collections::HashMap::new();
@@ -216,6 +158,7 @@ async fn health_handler() -> Json<HealthResponse> {
 }
 
 async fn latest_block_handler() -> Json<ApiResponse<BlockResponse>> {
+    // Static block data for demonstration
     let block = BlockResponse {
         slot: 123456789,
         hash: "3SnrsLVuVoupUhBAnYDJ9zxygyHJ5sY9i3FZwmgBVWqB".to_string(),
@@ -229,6 +172,7 @@ async fn latest_block_handler() -> Json<ApiResponse<BlockResponse>> {
 }
 
 async fn block_by_slot_handler(Path(slot): Path<String>) -> Response {
+    // Try to parse the slot
     let slot_number = match slot.parse::<u64>() {
         Ok(num) => num,
         Err(_) => {
@@ -239,6 +183,7 @@ async fn block_by_slot_handler(Path(slot): Path<String>) -> Response {
         }
     };
     
+    // Static block data for demonstration
     let block = BlockResponse {
         slot: slot_number,
         hash: "3SnrsLVuVoupUhBAnYDJ9zxygyHJ5sY9i3FZwmgBVWqB".to_string(),
@@ -252,6 +197,7 @@ async fn block_by_slot_handler(Path(slot): Path<String>) -> Response {
 }
 
 async fn transaction_handler(Path(signature): Path<String>) -> Json<ApiResponse<TransactionResponse>> {
+    // Static transaction data for demonstration
     let tx = TransactionResponse {
         signature: signature,
         slot: 123456789,

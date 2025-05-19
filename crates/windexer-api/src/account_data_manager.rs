@@ -3,27 +3,20 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use anyhow::Result;
 
-// Use the AccountData definition directly from account_endpoints
 use crate::account_endpoints::AccountData;
 use crate::helius::HeliusClient;
 
-/// Manager for account data and WebSocket connections
 pub struct AccountDataManager {
-    /// Helius client for fetching and subscribing to account data
     helius_client: Arc<HeliusClient>,
     
-    /// Account data cache
     cache: Arc<RwLock<HashMap<String, AccountData>>>,
     
-    /// Broadcast channel for account updates
     update_sender: broadcast::Sender<AccountData>,
     
-    /// Is the manager initialized?
     initialized: Arc<RwLock<bool>>,
 }
 
 impl AccountDataManager {
-    /// Create a new account data manager
     pub fn new(helius_client: Arc<HeliusClient>) -> Self {
         let (tx, _) = broadcast::channel(10000); // Buffer for 10,000 account updates
         
@@ -35,7 +28,6 @@ impl AccountDataManager {
         }
     }
     
-    /// Initialize the manager by connecting to Helius WebSocket and setting up subscriptions
     pub async fn initialize(&self) -> Result<()> {
         let mut initialized = self.initialized.write().await;
         
@@ -43,30 +35,9 @@ impl AccountDataManager {
             return Ok(());
         }
         
-        // Create initial simulation data for testing
-        let mut cache = self.cache.write().await;
-        
-        // Add some test accounts
-        let test_accounts = vec![
-            ("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),  // USDC
-            ("So11111111111111111111111111111111111111112", "11111111111111111111111111111111"),              // Wrapped SOL
-            ("JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB", "BPFLoaderUpgradeab1e11111111111111111111111"),   // Jupiter
-        ];
-        
-        for (pubkey, owner) in test_accounts {
-            let account = AccountData {
-                pubkey: pubkey.to_string(),
-                lamports: 100000000,
-                owner: owner.to_string(),
-                executable: false,
-                rent_epoch: 0,
-                data: vec![],
-                data_base64: Some("".to_string()),
-                slot: 100000000,
-                updated_at: chrono::Utc::now().timestamp(),
-            };
-            
-            cache.insert(pubkey.to_string(), account);
+        if let Err(e) = self.helius_client.connect_websocket().await {
+            tracing::warn!("Failed to connect to Helius WebSocket: {}", e);
+            // Continue even if WebSocket connection fails
         }
         
         *initialized = true;
@@ -75,15 +46,13 @@ impl AccountDataManager {
     }
     
     /// Subscribe to a Solana program for account updates
-    pub async fn subscribe_to_program(&self, _program_id: &str) -> Result<()> {
-        // Placeholder implementation
-        Ok(())
+    pub async fn subscribe_to_program(&self, program_id: &str) -> Result<()> {
+        self.helius_client.subscribe_program_updates(program_id).await
     }
     
     /// Subscribe to a specific account
-    pub async fn subscribe_to_account(&self, _pubkey: &str) -> Result<()> {
-        // Placeholder implementation
-        Ok(())
+    pub async fn subscribe_to_account(&self, pubkey: &str) -> Result<()> {
+        self.helius_client.subscribe_account_updates(pubkey).await
     }
     
     /// Get account data from cache
@@ -96,16 +65,52 @@ impl AccountDataManager {
             }
         }
         
-        // Not in cache, create a placeholder
+        // Not in cache, fetch from Helius
+        let response = self.helius_client.get_account_info(pubkey).await?;
+        
+        tracing::debug!("Helius account response: {:?}", response);
+        
+        // Parse the response
+        let result = response.get("result").ok_or_else(|| anyhow::anyhow!("Missing result field in response"))?;
+        let context = result.get("context").ok_or_else(|| anyhow::anyhow!("Missing context field in result"))?;
+        let value = result.get("value").ok_or_else(|| anyhow::anyhow!("Missing value field in result"))?;
+        
+        let slot = context.get("slot").and_then(|s| s.as_u64()).unwrap_or(0) as u64;
+        
+        // Handle null value (account not found)
+        if value.is_null() {
+            return Err(anyhow::anyhow!("Account not found"));
+        }
+        
+        // Extract account data
+        let lamports = value.get("lamports").and_then(|l| l.as_u64()).unwrap_or(0);
+        let owner = value.get("owner").and_then(|o| o.as_str()).unwrap_or("").to_string();
+        let executable = value.get("executable").and_then(|e| e.as_bool()).unwrap_or(false);
+        let rent_epoch = value.get("rentEpoch").and_then(|r| r.as_u64()).unwrap_or(0);
+        
+        // Data might be encoded as base64 or array of bytes
+        let data_base64 = if let Some(data) = value.get("data") {
+            if data.is_array() && data.as_array().unwrap().len() >= 2 {
+                let data_array = data.as_array().unwrap();
+                Some(data_array[0].as_str().unwrap_or("").to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let data = Vec::new(); // We'd need to decode the base64 data if needed
+        
         let account = AccountData {
             pubkey: pubkey.to_string(),
-            lamports: 100000000,
-            owner: "11111111111111111111111111111111".to_string(),
-            executable: false,
-            rent_epoch: 0,
-            data: vec![],
-            data_base64: Some("".to_string()),
-            slot: 100000000,
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+            data,
+            data_base64,
+            slot,
             updated_at: chrono::Utc::now().timestamp(),
         };
         
@@ -118,7 +123,8 @@ impl AccountDataManager {
     
     /// Get accounts by program ID
     pub async fn get_accounts_by_program(&self, program_id: &str, limit: usize) -> Result<Vec<AccountData>> {
-        // For testing, return accounts from our cache that match the program
+        // For now, return accounts from our cache that match the program
+        // In a real implementation, we would use getProgramAccounts from Helius
         let cache = self.cache.read().await;
         let mut matching_accounts = Vec::new();
         
@@ -128,23 +134,6 @@ impl AccountDataManager {
                 if matching_accounts.len() >= limit {
                     break;
                 }
-            }
-        }
-        
-        // If no matching accounts, create some placeholders
-        if matching_accounts.is_empty() {
-            for i in 0..limit {
-                matching_accounts.push(AccountData {
-                    pubkey: format!("account{}-{}", i, program_id),
-                    lamports: 100000000,
-                    owner: program_id.to_string(),
-                    executable: false,
-                    rent_epoch: 0,
-                    data: vec![],
-                    data_base64: Some("".to_string()),
-                    slot: 100000000,
-                    updated_at: chrono::Utc::now().timestamp(),
-                });
             }
         }
         

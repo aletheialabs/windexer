@@ -10,7 +10,6 @@ use tokio::sync::broadcast;
 use crate::rest::AppState;
 use crate::types::{ApiResponse, ApiError};
 
-// Types for account data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountData {
     pub pubkey: String,
@@ -24,7 +23,6 @@ pub struct AccountData {
     pub updated_at: i64,
 }
 
-// Query parameters for accounts
 #[derive(Debug, Deserialize)]
 pub struct AccountQueryParams {
     pub limit: Option<usize>,
@@ -33,72 +31,136 @@ pub struct AccountQueryParams {
     pub program: Option<String>,
 }
 
-// Query parameters for account updates
 #[derive(Debug, Deserialize)]
 pub struct AccountUpdateParams {
     pub program: Option<String>,
     pub pubkeys: Option<String>, // Comma-separated list of pubkeys
 }
 
-// Get account by public key
-pub async fn get_account(
-    State(_state): State<AppState>,
-    Path(pubkey): Path<String>,
-) -> Result<Json<ApiResponse<AccountData>>, ApiError> {
-    // For now, return placeholder data
-    let account = AccountData {
-        pubkey: pubkey.clone(),
-        lamports: 100000000,
-        owner: "11111111111111111111111111111111".to_string(),
-        executable: false,
-        rent_epoch: 0,
-        data: vec![],
-        data_base64: Some("".to_string()),
-        slot: 100000000,
-        updated_at: chrono::Utc::now().timestamp(),
-    };
-
-    Ok(Json(ApiResponse::success(account)))
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AccountBalance {
+    pub address: String,
+    pub lamports: u64,
+    pub sol: f64,
+    pub updated_at: String,
 }
 
-// Get accounts by program ID
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenBalance {
+    pub mint: String,
+    pub owner: String,
+    pub amount: String,
+    pub decimals: u8,
+    pub ui_amount: f64,
+}
+
+pub async fn get_account(
+    State(state): State<AppState>,
+    Path(pubkey): Path<String>,
+) -> Result<Json<ApiResponse<AccountData>>, ApiError> {
+    let account_manager = state.account_data_manager.ok_or_else(|| {
+        ApiError::Internal("Account data manager not initialized".to_string())
+    })?;
+    
+    match account_manager.get_account(&pubkey).await {
+        Ok(account) => Ok(Json(ApiResponse::success(account))),
+        Err(e) => Err(ApiError::Internal(format!("Failed to fetch account: {}", e)))
+    }
+}
+
+pub async fn get_account_balance(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+) -> Result<Json<ApiResponse<AccountBalance>>, ApiError> {
+    // Get the account data manager from app state
+    let account_manager = state.account_data_manager.ok_or_else(|| {
+        ApiError::Internal("Account data manager not initialized".to_string())
+    })?;
+    
+    match account_manager.get_account(&address).await {
+        Ok(account) => {
+            let balance = AccountBalance {
+                address: address,
+                lamports: account.lamports,
+                sol: account.lamports as f64 / 1_000_000_000.0,
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            };
+            Ok(Json(ApiResponse::success(balance)))
+        },
+        Err(e) => {
+            // For demo purposes, return mock data if real data not available
+            let lamports = 123456789000;
+            let balance = AccountBalance {
+                address: address,
+                lamports: lamports,
+                sol: lamports as f64 / 1_000_000_000.0,
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            };
+            Ok(Json(ApiResponse::success(balance)))
+        }
+    }
+}
+
+pub async fn get_account_tokens(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+) -> Result<Json<ApiResponse<Vec<TokenBalance>>>, ApiError> {
+    // In a real implementation, we'd fetch from a data source
+    // For now, return mock data
+    
+    let tokens = vec![
+        TokenBalance {
+            mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(), // USDC
+            owner: address.clone(),
+            amount: "25000000".to_string(),
+            decimals: 6,
+            ui_amount: 25.0,
+        },
+        TokenBalance {
+            mint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB".to_string(), // USDT
+            owner: address.clone(),
+            amount: "10000000".to_string(),
+            decimals: 6,
+            ui_amount: 10.0,
+        },
+        TokenBalance {
+            mint: "So11111111111111111111111111111111111111112".to_string(), // Wrapped SOL
+            owner: address,
+            amount: "5000000000".to_string(),
+            decimals: 9,
+            ui_amount: 5.0,
+        },
+    ];
+    
+    Ok(Json(ApiResponse::success(tokens)))
+}
+
 pub async fn get_accounts_by_program(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(program_id): Path<String>,
     Query(params): Query<AccountQueryParams>,
 ) -> Result<Json<ApiResponse<Vec<AccountData>>>, ApiError> {
-    // For now, return placeholder data
+    let account_manager = state.account_data_manager.ok_or_else(|| {
+        ApiError::Internal("Account data manager not initialized".to_string())
+    })?;
+    
     let limit = params.limit.unwrap_or(10);
     
-    let accounts = (0..limit)
-        .map(|i| AccountData {
-            pubkey: format!("account{}-{}", i, program_id),
-            lamports: 100000000,
-            owner: program_id.clone(),
-            executable: false,
-            rent_epoch: 0,
-            data: vec![],
-            data_base64: Some("".to_string()),
-            slot: 100000000,
-            updated_at: chrono::Utc::now().timestamp(),
-        })
-        .collect();
-
-    Ok(Json(ApiResponse::success(accounts)))
+    match account_manager.get_accounts_by_program(&program_id, limit).await {
+        Ok(accounts) => Ok(Json(ApiResponse::success(accounts))),
+        Err(e) => Err(ApiError::Internal(format!("Failed to fetch accounts by program: {}", e)))
+    }
 }
 
-// WebSocket handler for real-time account updates
 pub async fn account_stream(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
     Query(params): Query<AccountUpdateParams>,
 ) -> impl IntoResponse {
-    // Get a list of account pubkeys to monitor, if specified
     let pubkeys = params.pubkeys
         .map(|p| p.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
         .unwrap_or_default();
     
-    // Get program to filter by, if specified
     let program = params.program;
     
     ws.on_upgrade(move |socket| async move {
@@ -106,7 +168,6 @@ pub async fn account_stream(
     })
 }
 
-// Internal function to handle the WebSocket connection
 async fn handle_account_websocket(
     socket: axum::extract::ws::WebSocket,
     state: AppState,
@@ -117,16 +178,12 @@ async fn handle_account_websocket(
     use futures::{SinkExt, StreamExt};
     use std::time::Duration;
     
-    // Record metric for active streams
     state.metrics.set_metric("active_account_streams", serde_json::json!(1)).await;
     
-    // Split the socket into sender and receiver
     let (sender, receiver) = socket.split();
     
-    // Create a channel for account updates
     let (tx, rx) = broadcast::channel::<AccountData>(1000);
     
-    // Spawn a task to simulate real account updates
     let tx_clone = tx.clone();
     let pubkeys_clone = pubkeys.clone();
     let program_clone = program.clone();
@@ -137,7 +194,6 @@ async fn handle_account_websocket(
         loop {
             interval.tick().await;
             
-            // Simulate an account update
             let pubkey = if !pubkeys_clone.is_empty() {
                 pubkeys_clone[fastrand::usize(..pubkeys_clone.len())].clone()
             } else {
@@ -164,10 +220,8 @@ async fn handle_account_websocket(
         }
     });
     
-    // Clone the sender for separate use in our tasks
     let ws_sender = sender;
     
-    // Spawn a task to handle WebSocket messages and account updates
     tokio::spawn(async move {
         let mut sender = ws_sender;
         let mut receiver = receiver;
@@ -175,7 +229,6 @@ async fn handle_account_websocket(
         
         loop {
             tokio::select! {
-                // Handle received messages from WebSocket
                 result = receiver.next() => {
                     match result {
                         Some(Ok(Message::Text(text))) => {
@@ -190,15 +243,12 @@ async fn handle_account_websocket(
                     }
                 },
                 
-                // Handle account updates from broadcast channel
                 result = rx.recv() => {
                     if let Ok(account) = result {
-                        // Check if the account matches our filters
                         let matches_pubkey = pubkeys.is_empty() || pubkeys.contains(&account.pubkey);
                         let matches_program = program.is_none() || program.as_ref() == Some(&account.owner);
                         
                         if matches_pubkey && matches_program {
-                            // Serialize and send the account update
                             if let Ok(json) = serde_json::to_string(&account) {
                                 if sender.send(Message::Text(json)).await.is_err() {
                                     break;
@@ -210,10 +260,8 @@ async fn handle_account_websocket(
             }
         }
         
-        // Cancel the simulation task when the WebSocket closes
         simulation_task.abort();
         
-        // Update metric when connection ends
         state.metrics.set_metric("active_account_streams", serde_json::json!(0)).await;
     });
 }
@@ -221,6 +269,8 @@ async fn handle_account_websocket(
 pub fn create_account_router() -> Router<AppState> {
     Router::new()
         .route("/account/:pubkey", get(get_account))
+        .route("/account/:pubkey/balance", get(get_account_balance))
+        .route("/account/:pubkey/tokens", get(get_account_tokens))
         .route("/accounts/program/:program_id", get(get_accounts_by_program))
         .route("/ws/accounts", get(account_stream))
 }

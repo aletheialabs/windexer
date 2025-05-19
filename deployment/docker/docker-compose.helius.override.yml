@@ -14,11 +14,23 @@ services:
       - BASE_PORT=9000
     networks:
       - windexer-network
-    depends_on:
-      - node-0
     restart: unless-stopped
     deploy:
       replicas: 0
+  
+  # First node (node-0)
+  node-0:
+    <<: *node-base
+    container_name: windexer-node-0
+    volumes:
+      - /home/winuser/windexer/data/node_0:/app/data/node_0
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: node --index 0 --base-port 9000 --enable-tip-route
+    deploy:
+      replicas: 1
+      
   # Base indexer definition
   indexer-base: &indexer-base
     build:
