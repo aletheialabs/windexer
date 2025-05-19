@@ -61,6 +61,70 @@ pub struct MetricsConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum StorageType {
+    #[serde(rename = "rocksdb")]
+    RocksDB,
+    #[serde(rename = "parquet")]
+    Parquet,
+    #[serde(rename = "postgres")]
+    Postgres,
+}
+
+impl Default for StorageType {
+    fn default() -> Self {
+        StorageType::RocksDB
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ParquetConfig {
+    pub directory: String,
+    #[serde(default = "default_parquet_file_size_mb")]
+    pub max_file_size_mb: usize,
+    #[serde(default = "default_true")]
+    pub compression_enabled: bool,
+    #[serde(default = "default_parquet_partition_by_slot")]
+    pub partition_by_slot: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PostgresConfig {
+    pub connection_string: String,
+    #[serde(default = "default_true")]
+    pub create_tables: bool,
+    #[serde(default = "default_postgres_batch_size")]
+    pub batch_size: usize,
+    #[serde(default = "default_postgres_max_connections")]
+    pub max_connections: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct StorageConfig {
+    #[serde(default)]
+    pub storage_type: StorageType,
+    #[serde(default)]
+    pub parquet: Option<ParquetConfig>,
+    #[serde(default)]
+    pub postgres: Option<PostgresConfig>,
+    #[serde(default)]
+    pub rocksdb_path: Option<String>,
+    #[serde(default = "default_true")]
+    pub hot_cold_separation: bool,
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            storage_type: StorageType::RocksDB,
+            parquet: None,
+            postgres: None,
+            rocksdb_path: None,
+            hot_cold_separation: true,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GeyserPluginConfig {
     pub libpath: String,
     pub keypair: String, // Path to keypair file
@@ -83,6 +147,8 @@ pub struct GeyserPluginConfig {
     pub use_mmap: bool,
     #[serde(default)]
     pub metrics: MetricsConfig,
+    #[serde(default)]
+    pub storage: StorageConfig,
 }
 
 // Simplified SerializableKeypair - only implements what we need
@@ -193,6 +259,22 @@ fn default_metrics_interval() -> u64 {
     15
 }
 
+fn default_parquet_file_size_mb() -> usize {
+    128 // 128 MB per file is a good balance for Parquet
+}
+
+fn default_parquet_partition_by_slot() -> bool {
+    true // Partitioning by slot is efficient for blockchain data
+}
+
+fn default_postgres_batch_size() -> usize {
+    1000 // Default batch size for PostgreSQL inserts
+}
+
+fn default_postgres_max_connections() -> usize {
+    20 // Default connection pool size for PostgreSQL
+}
+
 impl Default for MetricsConfig {
     fn default() -> Self {
         Self {
@@ -226,6 +308,7 @@ impl Default for GeyserPluginConfig {
             panic_on_error: false,
             use_mmap: true,
             metrics: MetricsConfig::default(),
+            storage: StorageConfig::default(),
         }
     }
 }
