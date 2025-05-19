@@ -2,14 +2,15 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::RwLock;
 use anyhow::Result;
 use tracing::{info, error};
+use axum::Router;
 
-use crate::rest::{ApiServer, ApiConfig};
+use crate::rest::{ApiServer, ApiConfig, AppState};
 use crate::types::NodeInfo;
 use crate::types::{HealthStatus, HealthCheckResult};
 
-/// Run a standalone API server
 pub async fn run_api_server(
     bind_addr: SocketAddr,
     service_name: impl Into<String>,
@@ -29,27 +30,15 @@ pub async fn run_api_server(
     
     let server = ApiServer::new(config);
     
-    // Register default health checks
     let health = server.health();
     
-    // Use the new async registration method
-    health.register_async("system", Arc::new(|| {
-        Box::pin(async {
-            HealthCheckResult {
-                status: HealthStatus::Healthy,
-                details: Some("System is running".to_string()),
-                metrics: None,
-            }
-        })
-    })).await;
+    health.register("system", Arc::new(|| true)).await;
     
-    // Run the server (this will block until the server stops)
     server.start().await?;
     
     Ok(())
 }
 
-/// Run a server with custom configuration and shutdown signal
 pub async fn run_api_server_with_config(
     config: ApiConfig,
     shutdown_signal: Option<tokio::sync::oneshot::Receiver<()>>,
@@ -58,14 +47,12 @@ pub async fn run_api_server_with_config(
     
     let server = ApiServer::new(config);
     
-    // Start the server
     // TODO: Implement shutdown handling with the signal
     server.start().await?;
     
     Ok(())
 }
 
-/// Create a simple health check function that pings a URL
 pub fn create_url_health_check(
     url: String,
     timeout_ms: u64,

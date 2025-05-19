@@ -2,41 +2,49 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use axum::{response::IntoResponse, http::StatusCode, Json};
 
-/// Standard API response format
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiResponse<T> {
-    /// Success status
-    pub success: bool,
-    /// Optional result data
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<T>,
-    /// Optional error message
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+/// API response wrapper
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum ApiResponse<T> {
+    /// Successful response with data
+    Success { success: bool, data: T },
+    /// Error response with message
+    Error { success: bool, error: ApiError },
 }
 
 impl<T> ApiResponse<T> {
-    /// Create a successful response with data
+    /// Create a new success response
     pub fn success(data: T) -> Self {
-        Self {
+        ApiResponse::Success {
             success: true,
-            data: Some(data),
-            error: None,
+            data,
+        }
+    }
+
+    /// Create a new error response
+    pub fn error(error: ApiError) -> Self {
+        ApiResponse::Error {
+            success: false,
+            error,
         }
     }
     
-    /// Create an error response
-    pub fn error(message: impl Into<String>) -> Self {
-        Self {
-            success: false,
-            data: None,
-            error: Some(message.into()),
+    /// Create a Jito-compatible response (unwrapped data)
+    pub fn jito_compat(data: T) -> T {
+        data
+    }
+    
+    /// Get the data if success, or None if error
+    pub fn data(&self) -> Option<&T> {
+        match self {
+            ApiResponse::Success { data, .. } => Some(data),
+            _ => None,
         }
     }
 }
 
 /// API error types
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone, Serialize, Deserialize)]
 pub enum ApiError {
     #[error("Not found: {0}")]
     NotFound(String),
@@ -52,20 +60,25 @@ pub enum ApiError {
     
     #[error("Forbidden: {0}")]
     Forbidden(String),
+
+    // Add Internal Error variant for compatibility
+    #[error("Internal server error: {0}")]
+    InternalError(String),
 }
 
 /// Convert ApiError to HTTP response
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        let (status, error_message) = match self {
+        let (status, error_message) = match &self {
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
             ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
             ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
+            ApiError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
         
-        let body = Json(ApiResponse::<()>::error(error_message));
+        let body = Json(ApiResponse::<()>::error(self));
         
         (status, body).into_response()
     }
