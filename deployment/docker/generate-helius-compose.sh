@@ -26,11 +26,25 @@ services:
       - BASE_PORT=${BASE_PORT:-9000}
     networks:
       - windexer-network
-    depends_on:
-      - node-0
     restart: unless-stopped
-    deploy:
-      replicas: 0
+EOL
+
+# First node (node-0) definition
+cat >> $OUTPUT_FILE << EOL
+  # First node (node-0)
+  node-0:
+    <<: *node-base
+    container_name: windexer-node-0
+    volumes:
+      - ${STORAGE_DIR:-/home/winuser/windexer/data}/node_0:/app/data/node_0
+    ports:
+      - "${BASE_PORT:-9000}:9000"
+      - "${BASE_PORT_PLUS_ONE:-9001}:9001"
+    command: node --index 0 --base-port 9000 --enable-tip-route
+EOL
+
+# Base indexer definition
+cat >> $OUTPUT_FILE << EOL
   # Base indexer definition
   indexer-base: &indexer-base
     build:
@@ -47,9 +61,8 @@ services:
     depends_on:
       - node-0
     restart: unless-stopped
-    deploy:
-      replicas: 0
 EOL
+
 # Generate node services (start from node-1 since node-0 is already in the base file)
 for i in $(seq 1 $((NODES-1))); do
   NODE_PORT=$((BASE_PORT + i*100))
@@ -65,10 +78,9 @@ for i in $(seq 1 $((NODES-1))); do
       - "$NODE_PORT:9000"
       - "$NODE_PORT_PLUS_ONE:9001"
     command: node --index $i --base-port 9000 --enable-tip-route --bootstrap-peers node-0:9000
-    deploy:
-      replicas: 1
 EOL
 done
+
 # Generate indexer services
 for i in $(seq 1 $INDEXERS); do
   INDEXER_PORT=$((INDEXER_BASE_PORT + i))
@@ -82,9 +94,8 @@ for i in $(seq 1 $INDEXERS); do
     ports:
       - "$INDEXER_PORT:$INDEXER_PORT"
     command: indexer --index $i --bootstrap-peers node-0:9000 --base-port $INDEXER_PORT
-    deploy:
-      replicas: 1
 EOL
 done
+
 echo "Generated $OUTPUT_FILE with $NODES nodes and $INDEXERS indexers"
 echo "Use with: docker-compose -f docker-compose.helius.yml -f $OUTPUT_FILE up -d"
