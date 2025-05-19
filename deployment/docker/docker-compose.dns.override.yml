@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Configure validator with DNS
+  solana-validator:
+    ports:
+      - "${RPC_PORT:-8899}:8899"
+      - "${WS_PORT:-8900}:8900"
+      - "${FAUCET_PORT:-9900}:9900"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.validator-rpc.rule=Host(`test-may-us-01.windnetwork.ai`) && PathPrefix(`/rpc`)"
+      - "traefik.http.services.validator-rpc.loadbalancer.server.port=8899"
+      - "traefik.http.routers.validator-ws.rule=Host(`test-may-us-01.windnetwork.ai`) && PathPrefix(`/ws`)"
+      - "traefik.http.services.validator-ws.loadbalancer.server.port=8900"
+    restart: unless-stopped
+
+  # Update API server with DNS configuration
+  api-server:
+    ports:
+      - "${API_PORT:-3000}:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`test-may-us-01.windnetwork.ai`) && PathPrefix(`/api`)"
+      - "traefik.http.services.api.loadbalancer.server.port=3000"
+    restart: unless-stopped
+    environment:
+      SOLANA_RPC_URL: "http://solana-validator:8899"
+      SOLANA_WS_URL: "ws://solana-validator:8900"
+    
+  # Node-0 with DNS configuration  
+  node-0:
+    ports:
+      - "${BASE_PORT:-9000}:9000"
+      - "${BASE_PORT_PLUS_ONE:-9001}:9001"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.node.rule=Host(`test-may-us-01.windnetwork.ai`) && PathPrefix(`/node`)"
+      - "traefik.http.services.node.loadbalancer.server.port=9000"
+    restart: unless-stopped
+
+  # Indexer with DNS configuration
+  indexer-1:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.node
+    container_name: windexer-indexer-1
+    volumes:
+      - ../../data/indexer_1:/app/data/indexer_1
+    ports:
+      - "10001:10001"
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - SOLANA_RPC_URL=http://solana-validator:8899
+      - SOLANA_WS_URL=ws://solana-validator:8900
+    command: indexer --index 1 --bootstrap-peers node-0:9000 --base-port 10001
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.indexer.rule=Host(`test-may-us-01.windnetwork.ai`) && PathPrefix(`/indexer`)"
+      - "traefik.http.services.indexer.loadbalancer.server.port=10001"
+    networks:
+      - windexer-network
+    depends_on:
+      - node-0
+
+  # Add Traefik as reverse proxy to handle DNS routing
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+    networks:
+      - windexer-network
+    restart: unless-stopped 
