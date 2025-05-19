@@ -15,12 +15,14 @@ import {
   FileText, 
   Radio, 
   CheckCircle, 
-  XCircle
+  XCircle,
+  Droplets
 } from 'lucide-react';
 import MultiIndex from './components/MultiIndex';
 import BlockExplorer from './components/BlockExplorer';
 import LoadingSpinner from './components/LoadingSpinner';
 import TransactionViewer from './components/TransactionViewer';
+import RaydiumTracker from './components/RaydiumTracker';
 import {
   StatusResponse,
   HealthResponse,
@@ -50,6 +52,7 @@ const App = () => {
           {activeTab === 'accounts' && <AccountInspector />}
           {activeTab === 'multi-index' && <MultiIndex />}
           {activeTab === 'websocket' && <WebSocketDemo />}
+          {activeTab === 'raydium' && <RaydiumTracker />}
         </main>
       </div>
       <Footer />
@@ -84,6 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     { id: 'accounts', name: 'Accounts', icon: <Wallet className="h-5 w-5" /> },
     { id: 'multi-index', name: 'Multi-Index', icon: <Layers className="h-5 w-5" /> },
     { id: 'websocket', name: 'Live Updates', icon: <Radio className="h-5 w-5" /> },
+    { id: 'raydium', name: 'Raydium Tracker', icon: <Droplets className="h-5 w-5" /> },
   ];
 
   return (
