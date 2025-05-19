@@ -79,7 +79,7 @@ RUN chmod +x /app/scripts/test-scripts/*.sh
 
 # Install TypeScript and ts-node for examples
 WORKDIR /app/examples/typescript
-RUN npm install --quiet
+RUN PATH="/usr/local/bin:$PATH" npm install --quiet
 
 # Back to main app directory
 WORKDIR /app
