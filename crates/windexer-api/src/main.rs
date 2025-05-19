@@ -1,15 +1,24 @@
+use axum::{
+    routing::get,
+    Router,
+    Json,
+    extract::Path,
+    http::{StatusCode, Method},
+    response::{IntoResponse, Response},
+};
+use serde::{Serialize, Deserialize};
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tower_http::cors::{CorsLayer, Any};
 use std::sync::Arc;
 use anyhow::Result;
 use tracing::{info, error};
 
-// Use the local modules instead of windexer_api
 use crate::server::run_api_server;
 use crate::rest::{ApiServer, ApiConfig};
 use crate::types::NodeInfo;
 
-// Local modules
 mod account_data_manager;
 mod account_endpoints;
 mod block_endpoints;
@@ -23,20 +32,76 @@ mod transaction_data_manager;
 mod transaction_endpoints;
 mod types;
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ApiResponse<T> {
+    success: bool,
+    data: Option<T>,
+    error: Option<String>,
+}
+
+impl<T> ApiResponse<T> {
+    fn success(data: T) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    fn error(msg: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            data: None,
+            error: Some(msg.into()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StatusResponse {
+    name: String,
+    version: String,
+    uptime: u64,
+    timestamp: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HealthResponse {
+    status: String,
+    uptime: u64,
+    timestamp: String,
+    checks: std::collections::HashMap<String, bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BlockResponse {
+    slot: u64,
+    hash: String,
+    parent_hash: String,
+    block_time: u64,
+    block_height: u64,
+    transactions: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TransactionResponse {
+    signature: String,
+    slot: u64,
+    block_time: u64,
+    fee: u64,
+    status: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing subscriber only once, with proper guard
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()))
         .finish();
     
-    // Try to set the subscriber as the global default
     if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
         eprintln!("Warning: Failed to set global tracing subscriber: {}", e);
-        // Continue anyway, as tracing is non-essential
     }
 
-    // Get configuration from environment
     let port = std::env::var("API_PORT")
         .unwrap_or_else(|_| "3001".to_string())
         .parse::<u16>()
@@ -51,11 +116,9 @@ async fn main() -> Result<()> {
     let version = std::env::var("SERVICE_VERSION")
         .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
 
-    // Get Helius API key
     let helius_api_key = std::env::var("HELIUS_API_KEY")
         .unwrap_or_else(|_| "test-api-key".to_string());
 
-    // Create node info
     let node_info = Some(NodeInfo {
         node_id: "api-node-1".to_string(),
         node_type: "api".to_string(),
@@ -64,7 +127,6 @@ async fn main() -> Result<()> {
         is_bootstrap: false,
     });
 
-    // Create API configuration
     let config = ApiConfig {
         bind_addr: SocketAddr::from_str(&bind_addr)?,
         service_name: service_name.clone(),
@@ -74,10 +136,8 @@ async fn main() -> Result<()> {
         path_prefix: Some("/api".to_string()),
     };
 
-    // Create and initialize Helius client
     let helius_client = Arc::new(helius::HeliusClient::new(&helius_api_key));
 
-    // Test Helius connection
     match helius_client.get_latest_block().await {
         Ok(_) => info!("Successfully connected to Helius API"),
         Err(e) => {
@@ -86,43 +146,31 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Create account data manager
     let account_data_manager = Arc::new(account_data_manager::AccountDataManager::new(helius_client.clone()));
 
-    // Create transaction data manager
     let transaction_data_manager = Arc::new(transaction_data_manager::TransactionDataManager::new(helius_client.clone()));
 
-    // Initialize account data manager
+    // Initializ account data manager
     info!("Initializing account data manager");
     if let Err(e) = account_data_manager.initialize().await {
         tracing::warn!("Failed to initialize account data manager: {}", e);
         // We'll continue even if this fails, as it might be a transient error
     }
 
-    // Initialize transaction data manager
     info!("Initializing transaction data manager");
     if let Err(e) = transaction_data_manager.initialize().await {
         tracing::warn!("Failed to initialize transaction data manager: {}", e);
         // We'll continue even if this fails, as it might be a transient error
     }
 
-    // Create API server with data managers
     let mut server = ApiServer::new(config);
     
-    // Set the account data manager
     server.set_account_data_manager(account_data_manager);
-    
-    // Set the transaction data manager
     server.set_transaction_data_manager(transaction_data_manager);
-    
-    // Set the Helius client
     server.set_helius_client(helius_client);
-
-    // Register health checks
     let health = server.health();
     health.register("api", Arc::new(|| true)).await;
     
-    // Register metrics collection
     let metrics = server.metrics();
     metrics.register_collector(|| {
         let mut metrics = std::collections::HashMap::new();
@@ -132,9 +180,85 @@ async fn main() -> Result<()> {
         metrics
     });
 
-    // Start the server
     info!("Starting API server on {}", bind_addr);
     server.start().await?;
 
     Ok(())
 }
+
+async fn status_handler() -> Json<ApiResponse<StatusResponse>> {
+    let start_time = SystemTime::now().checked_sub(Duration::from_secs(3600)).unwrap_or(UNIX_EPOCH);
+    
+    let status = StatusResponse {
+        name: "windexer-api".to_string(),
+        version: "0.1.0".to_string(),
+        uptime: SystemTime::now().duration_since(start_time).unwrap_or(Duration::from_secs(0)).as_secs(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    };
+    
+    Json(ApiResponse::success(status))
+}
+
+async fn health_handler() -> Json<HealthResponse> {
+    let start_time = SystemTime::now().checked_sub(Duration::from_secs(3600)).unwrap_or(UNIX_EPOCH);
+    
+    let mut checks = std::collections::HashMap::new();
+    checks.insert("api".to_string(), true);
+    
+    let response = HealthResponse {
+        status: "healthy".to_string(),
+        uptime: SystemTime::now().duration_since(start_time).unwrap_or(Duration::from_secs(0)).as_secs(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        checks,
+    };
+    
+    Json(response)
+}
+
+async fn latest_block_handler() -> Json<ApiResponse<BlockResponse>> {
+    let block = BlockResponse {
+        slot: 123456789,
+        hash: "3SnrsLVuVoupUhBAnYDJ9zxygyHJ5sY9i3FZwmgBVWqB".to_string(),
+        parent_hash: "H4vxhecSR1JUdr5n8MLFSgEDLJkdCtQQgXgUL3EG85KC".to_string(),
+        block_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_secs(0)).as_secs(),
+        block_height: 123456700,
+        transactions: 100,
+    };
+    
+    Json(ApiResponse::success(block))
+}
+
+async fn block_by_slot_handler(Path(slot): Path<String>) -> Response {
+    let slot_number = match slot.parse::<u64>() {
+        Ok(num) => num,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error(format!("Invalid slot number: {}", slot))),
+            ).into_response();
+        }
+    };
+    
+    let block = BlockResponse {
+        slot: slot_number,
+        hash: "3SnrsLVuVoupUhBAnYDJ9zxygyHJ5sY9i3FZwmgBVWqB".to_string(),
+        parent_hash: "H4vxhecSR1JUdr5n8MLFSgEDLJkdCtQQgXgUL3EG85KC".to_string(),
+        block_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_secs(0)).as_secs(),
+        block_height: slot_number.saturating_sub(100),
+        transactions: 100,
+    };
+    
+    Json(ApiResponse::success(block)).into_response()
+}
+
+async fn transaction_handler(Path(signature): Path<String>) -> Json<ApiResponse<TransactionResponse>> {
+    let tx = TransactionResponse {
+        signature: signature,
+        slot: 123456789,
+        block_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_secs(0)).as_secs(),
+        fee: 5000,
+        status: "confirmed".to_string(),
+    };
+    
+    Json(ApiResponse::success(tx))
+} 
