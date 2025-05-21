@@ -21,6 +21,7 @@ path = "src/helius.rs"
 name = "helius_network"
 path = "src/helius_network.rs"
 
+[[bin]]
 name = "local-gen"
 path = "src/local_gen.rs"
 
