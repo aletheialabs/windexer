@@ -136,7 +136,7 @@ run-validator-with-geyser: build-geyser
 		--geyser-plugin-config $(GEYSER_CONFIG) \
 		--reset \
 		--faucet-port 9910 \
-		--rpc-port 8999 \
+		--rpc-port 8899 \
 		--bind-address 127.0.0.1
 
 run-geyser:
@@ -178,7 +178,7 @@ init-avs-local:
 	@echo "Using Devnet is recommended (run 'make init-avs-devnet' instead)"
 	@echo ""
 	@echo "If you still want to proceed, when prompted enter:"
-	@echo "  Solana API URL: http://127.0.0.1:8999"
+	@echo "  Solana API URL: http://127.0.0.1:8899"
 	@echo "  Solana WS URL: ws://127.0.0.1:9000"
 	@camb init -t avs $(AVS_DEMO_DIR)
 
